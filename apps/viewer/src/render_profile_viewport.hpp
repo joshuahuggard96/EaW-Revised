@@ -65,6 +65,14 @@ inline void apply_render_profile(godot::Viewport& viewport, const RenderProfile 
     viewport.set_anisotropic_filtering_level(render_profile_detail::anisotropy(settings.anisotropy));
 }
 
+// Draws the 3D scene at `scale` times the window resolution and filters it
+// to the window. Bilinear needs no motion vectors, so every shader adapter
+// keeps working; the 2D interface stays at the window resolution.
+inline void apply_render_scale(godot::Viewport& viewport, const float scale) {
+    viewport.set_scaling_3d_mode(godot::Viewport::SCALING_3D_MODE_BILINEAR);
+    viewport.set_scaling_3d_scale(scale);
+}
+
 // The root viewport's settings as a report object: the profile they match
 // ("custom" for neither) and the values themselves.
 [[nodiscard]] inline std::string render_profile_report() {
