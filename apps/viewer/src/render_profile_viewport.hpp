@@ -1,5 +1,6 @@
 #pragma once
 
+#include "output_mode.hpp"
 #include "render_profile.hpp"
 
 #include <godot_cpp/classes/engine.hpp>
@@ -53,11 +54,15 @@ namespace render_profile_detail {
 [[nodiscard]] inline RenderProfile active_render_profile() {
     auto* tree = godot::Object::cast_to<godot::SceneTree>(godot::Engine::get_singleton()->get_main_loop());
     const godot::Window* root = tree ? tree->get_root() : nullptr;
-    return root && render_profile_detail::settings_of(*root) == render_settings(RenderProfile::enhanced)
-        ? RenderProfile::enhanced : RenderProfile::retail;
+    if (!root || render_profile_detail::settings_of(*root) != render_settings(RenderProfile::enhanced)) {
+        return RenderProfile::retail;
+    }
+    return output_mode() == OutputMode::linear ? RenderProfile::remastered : RenderProfile::enhanced;
 }
 
+// Before any renderer exists: the output mode decides how every shader compiles.
 inline void apply_render_profile(godot::Viewport& viewport, const RenderProfile profile) {
+    output_mode() = profile == RenderProfile::remastered ? OutputMode::linear : OutputMode::stored;
     const RenderSettings settings = render_settings(profile);
     viewport.set_msaa_3d(render_profile_detail::msaa(settings.msaa_samples));
     viewport.set_screen_space_aa(
@@ -83,7 +88,8 @@ inline void apply_render_scale(godot::Viewport& viewport, const float scale) {
     const bool fxaa = root->get_screen_space_aa() == godot::Viewport::SCREEN_SPACE_AA_FXAA;
     const std::string_view name = fxaa ? "custom"
         : settings == render_settings(RenderProfile::retail) ? "retail"
-        : settings == render_settings(RenderProfile::enhanced) ? "enhanced" : "custom";
+        : settings == render_settings(RenderProfile::enhanced)
+            ? (output_mode() == OutputMode::linear ? "remastered" : "enhanced") : "custom";
     return "{\"name\": \"" + std::string(name) + "\", \"msaa_samples\": " + std::to_string(settings.msaa_samples)
         + ", \"screen_space_aa\": \"" + (settings.smaa ? "smaa" : fxaa ? "fxaa" : "disabled")
         + "\", \"anisotropic_filtering\": " + std::to_string(settings.anisotropy) + '}';

@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <regex>
 #include <string>
 #include <string_view>
@@ -98,6 +99,42 @@ void check(const bool condition, const std::string_view message) {
 
 using namespace legacy_family_test_support;
 
+// The remastered profile's linear output (output_mode.hpp): every legacy
+// source decodes ALBEDO once, at the end of fragment(), and is otherwise as
+// written; sources the transform must leave alone stay byte-identical.
+void linear_output_contracts() {
+    const std::string decode = "ALBEDO = eawr_linear_output(ALBEDO);";
+    for (const legacy::Family& family : legacy::registry()) {
+        const std::string name(family.program);
+        const std::string source(family.shader(admitted_pass(family)));
+        const std::optional<std::string> linear = godot_backend::linear_output_source(source);
+        check(linear.has_value(), name + " has a linear-output form");
+        if (!linear) continue;
+        const std::size_t first = linear->find(decode);
+        check(first != std::string::npos && linear->find(decode, first + 1) == std::string::npos,
+            name + " decodes ALBEDO exactly once");
+        check(linear->find("vec3 eawr_linear_output(vec3 stored_rgb)") < linear->find("void fragment()"),
+            name + " declares the decoder before fragment()");
+        check(first != std::string::npos && linear->find_first_not_of(" \n", first + decode.size()) != std::string::npos
+                && (*linear)[linear->find_first_not_of(" \n", first + decode.size())] == '}',
+            name + " decodes as the last statement of fragment()");
+    }
+    const std::string ui = "shader_type canvas_item;\nvoid fragment() { COLOR = vec4(1.0); }\n";
+    check(godot_backend::linear_output_source(ui) == ui, "a canvas_item shader is compiled as written");
+    const std::string screen = "shader_type spatial;\nuniform sampler2D s : hint_screen_texture;\n"
+                               "void fragment() { ALBEDO = texture(s, SCREEN_UV).rgb; }\n";
+    check(godot_backend::linear_output_source(screen) == screen, "a screen-texture reader is compiled as written");
+    const std::string marked = "shader_type spatial;\n// eawr:linear-output\nvoid fragment() { ALBEDO = vec3(0.5); }\n";
+    check(godot_backend::linear_output_source(marked) == marked, "a marked linear source is compiled as written");
+    const std::string early = "shader_type spatial;\nvoid fragment() { if (UV.x > 0.5) { ALBEDO = vec3(1.0); return; } "
+                              "ALBEDO = vec3(0.0); }\n";
+    const auto guarded = godot_backend::linear_output_source(early);
+    check(guarded && guarded->find("{ " + decode + " return; }") != std::string::npos,
+        "an early return decodes before it leaves fragment()");
+    check(!godot_backend::linear_output_source("shader_type spatial;\nvoid fragment() { ALBEDO = vec3(1.0);\n"),
+        "an unbalanced fragment() has no linear form");
+}
+
 int main() {
     texture_placeholder_contracts();
     ownership_colorization_contracts();
@@ -111,6 +148,7 @@ int main() {
     reference_contracts();
     bump_colorize_contracts();
     dx8_mesh_contracts();
+    linear_output_contracts();
     if (failures != 0) {
         std::cerr << failures << " legacy family contract(s) failed\n";
         return EXIT_FAILURE;

@@ -62,6 +62,12 @@ void ViewerHost::read_host_options(const PackedStringArray& arguments) {
                 break;
             }
             options_->render_scale = utf8(arguments[++index]);
+        } else if (argument == "--eawr-exposure") {
+            if (index + 1 >= arguments.size()) {
+                options_->exposure_missing = true;
+                break;
+            }
+            options_->exposure = utf8(arguments[++index]);
         } else if (argument == "--eawr-scene") {
             if (!take_input(options_->scene_path)) break;
         } else if (argument == "--eawr-replay") {
