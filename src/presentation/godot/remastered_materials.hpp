@@ -58,6 +58,13 @@ float eawr_filtered_roughness(float authored, vec3 normal_dx, vec3 normal_dy) {
     return sqrt(sqrt(alpha2));
 }
 
+// The share of a gloss mask a material keeps: its specular colour's
+// strongest channel, at most 1. Hulls author Specular 1; asteroids a
+// near-white mask with Specular 0.08, which retail's dim highlight hid.
+float eawr_specular_strength(vec3 specular) {
+    return clamp(max(max(specular.r, specular.g), specular.b), 0.0, 1.0);
+}
+
 // Glossy panels reflect like clear-coated paint (F0 0.25), matte ones like
 // plain dielectric (0.04).
 float eawr_reflectance(float gloss) {
@@ -147,7 +154,7 @@ void fragment() {
     vec3 base_linear = eawr_decode(base.rgb);
     ALBEDO = mix(base_linear, eawr_colorization * base_linear, base.a) * eawr_unit_light_scale;
     EMISSION = 2.0 * eawr_emissive * ALBEDO;
-    float eawr_gloss = texture(GlossTexture, UV).r;
+    float eawr_gloss = texture(GlossTexture, UV).r * eawr_specular_strength(eawr_specular);
 )GODOT";
 
 // The fixed-function MeshAlpha sph_t1 (shader_adapter.hpp
@@ -220,7 +227,7 @@ void fragment() {
     vec4 base = texture(BaseTexture, UV);
     ALBEDO = eawr_decode(base.rgb);
     EMISSION = 2.0 * Emissive.rgb * ALBEDO;
-    float eawr_gloss = base.a;
+    float eawr_gloss = base.a * eawr_specular_strength(Specular.rgb);
 )GODOT";
 
 // The opaque RSKIN adapter (shader_adapter.hpp rskin_shader_opaque) for
@@ -266,7 +273,7 @@ void fragment() {
     vec4 base = texture(BaseTexture, UV);
     ALBEDO = mix(eawr_decode(base.rgb), Colorization.rgb, base.a);
     EMISSION = 2.0 * Emissive.rgb * ALBEDO;
-    float eawr_gloss = base.a;
+    float eawr_gloss = base.a * eawr_specular_strength(Specular.rgb);
 )GODOT";
 
 [[nodiscard]] inline const std::string& gloss_source() {
