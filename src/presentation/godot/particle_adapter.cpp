@@ -1,5 +1,6 @@
 #include "particle_adapter.hpp"
 #include "particle_texture.hpp"
+#include "stored_output.hpp"
 #include "particle_upload.hpp"
 #include "particle_culling.hpp"
 
@@ -642,7 +643,7 @@ private:
         }
         // The same compiler observation as the renderer's modern route: a probe
         // uniform must survive compilation, so a valid RID alone is not success.
-        std::string probed = program;
+        std::string probed = stored_output::backend_source(program);
         const std::size_t declaration_end = probed.find(';');
         probed.insert(declaration_end + 1, "\nuniform float eawr_compile_probe;\n");
         const RID shader = rendering.shader_create();

@@ -4,6 +4,34 @@
 #include "particle_culling.hpp"
 
 namespace eawr::presentation::godot_backend {
+namespace {
+
+// The remastered frame (output_mode.hpp): Reinhard with white 6 rolls
+// overbright specular and additive terms off instead of clipping them, and,
+// having no toe, keeps dark hulls and the backdrop where the stored-value
+// frame has them. On M2 Coruscant ACES needed an exposure that made lit hulls
+// a quarter brighter to lift the backdrop, AgX greyed the nebulae and Filmic
+// lifted the blacks. The exposure is the player's (--eawr-exposure).
+void apply_linear_tonemap(RenderingServer& rendering, const RID& environment) {
+    rendering.environment_set_tonemap(
+        environment, RenderingServer::ENV_TONE_MAPPER_REINHARD, linear_exposure(), 6.0F);
+}
+
+// Godot's glow standing in for the retail SceneBloom: the scene's cutoff is
+// the HDR threshold and 1.5 times its strength the intensity, since the
+// tonemapper's shoulder dims a halo the retail pass added after saturation.
+void apply_linear_glow(
+    RenderingServer& rendering, const RID& environment, const std::optional<lighting::bloom::SceneBloom>& bloom) {
+    PackedFloat32Array levels;
+    for (const float level : {0.0F, 0.0F, 1.0F, 0.6F, 0.3F, 0.0F, 0.0F}) levels.push_back(level);
+    constexpr float scale = 1.5F;
+    rendering.environment_set_glow(environment, bloom.has_value(), levels,
+        bloom ? bloom->strength * scale : 0.0F, 1.0F, 0.0F, 0.0F, RenderingServer::ENV_GLOW_BLEND_MODE_SOFTLIGHT,
+        bloom ? bloom->cutoff : 1.0F, 1.0F, 12.0F, 0.0F, RID());
+}
+
+} // namespace
+
 
 [[nodiscard]] std::string utf8(const String& value) {
     const CharString converted = value.utf8();
@@ -68,7 +96,9 @@ GodotRenderer::Impl::Impl(Node3D& owner, std::shared_ptr<GodotShaderCache> shade
     rendering->environment_set_background(environment_, RenderingServer::ENV_BG_COLOR);
     // The stored-value pass decodes the colour buffer once more after the
     // RenderingDevice clear, so there the clear colour is encoded once more.
+    // A linear frame is never decoded and takes the linear value.
     const auto background = [](const float linear) {
+        if (stored_output::linear()) return linear;
         const float stored = linear_to_srgb_component(linear);
         return stored_output::active() ? linear_to_srgb_component(stored) : stored;
     };
@@ -79,6 +109,7 @@ GodotRenderer::Impl::Impl(Node3D& owner, std::shared_ptr<GodotShaderCache> shade
     // auto-exposure, so the output pixel is the stored value.
     rendering->environment_set_tonemap(
         environment_, RenderingServer::ENV_TONE_MAPPER_LINEAR, 1.0, 1.0);
+    if (stored_output::linear()) apply_linear_tonemap(*rendering, environment_);
     rendering->scenario_set_environment(scenario_, environment_);
     stored_compositor_ = stored_output::create(*rendering);
     if (stored_compositor_.compositor.is_valid()) {
@@ -153,6 +184,13 @@ void GodotRenderer::Impl::set_wind(const GodotRenderer::WindState& wind) {
 
 void GodotRenderer::Impl::set_scene_bloom(const std::optional<lighting::bloom::SceneBloom>& bloom) {
     RenderingServer* rendering = RenderingServer::get_singleton();
+    if (rendering && stored_output::linear()) {
+        // A linear frame glows with Godot's HDR glow at the scene's strength
+        // and cutoff; the retail pass stays off.
+        apply_linear_glow(*rendering, environment_, bloom);
+        scene_bloom_active_ = bloom.has_value();
+        return;
+    }
     if (!rendering || !stored_compositor_.bloom.is_valid()) return;
     scene_bloom::configure(*rendering, stored_compositor_.bloom, bloom);
     scene_bloom_active_ = bloom.has_value();

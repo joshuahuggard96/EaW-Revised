@@ -41,7 +41,7 @@ void ViewerHost::_ready() {
     }
     const std::optional<RenderProfile> requested_render_profile = parse_render_profile(options_->render_profile);
     if (options_->render_profile_missing || (!options_->render_profile.empty() && !requested_render_profile)) {
-        status_message_ = "--eawr-render-profile expects retail or enhanced";
+        status_message_ = "--eawr-render-profile expects retail, enhanced or remastered";
         UtilityFunctions::printerr(String(status_message_.c_str()));
         static_cast<void>(write_report("failed"));
         stop(2);
@@ -58,13 +58,25 @@ void ViewerHost::_ready() {
     const std::optional<float> render_scale = options_->render_scale.empty()
         ? std::optional<float>{1.0F} : parse_render_scale(options_->render_scale);
     if (options_->render_scale_missing || !render_scale
-        || (*render_scale != 1.0F && render_profile != RenderProfile::enhanced)) {
-        status_message_ = "--eawr-render-scale expects a number from 0.5 to 2 and the enhanced render profile";
+        || (*render_scale != 1.0F && render_profile == RenderProfile::retail)) {
+        status_message_ = "--eawr-render-scale expects a number from 0.5 to 2 and the enhanced or remastered "
+                          "render profile";
         UtilityFunctions::printerr(String(status_message_.c_str()));
         static_cast<void>(write_report("failed"));
         stop(2);
         return;
     }
+    const std::optional<float> exposure = options_->exposure.empty()
+        ? std::optional<float>{default_linear_exposure} : parse_exposure(options_->exposure);
+    if (options_->exposure_missing || !exposure
+        || (!options_->exposure.empty() && render_profile != RenderProfile::remastered)) {
+        status_message_ = "--eawr-exposure expects a number from 0.25 to 4 and the remastered render profile";
+        UtilityFunctions::printerr(String(status_message_.c_str()));
+        static_cast<void>(write_report("failed"));
+        stop(2);
+        return;
+    }
+    linear_exposure() = *exposure;
     apply_render_profile(*get_viewport(), render_profile);
     apply_render_scale(*get_viewport(), *render_scale);
 
