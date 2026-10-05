@@ -184,6 +184,7 @@ void GodotRenderer::Impl::apply_lighting_params(RenderingServer& rendering, cons
         Vector3(lighting_->specular[0], lighting_->specular[1], lighting_->specular[2]));
     rendering.material_set_param(material, StringName("eawr_shadow_floor"),
         Vector3(lighting_->shadow_floor[0], lighting_->shadow_floor[1], lighting_->shadow_floor[2]));
+    rendering.material_set_param(material, StringName("eawr_glow"), glow_strength());
     if (backdrop_cubemap_.is_valid()) {
         rendering.material_set_param(material, StringName(backdrop_parameter.data()), backdrop_cubemap_);
         rendering.material_set_param(material, StringName("eawr_backdrop_strength"), backdrop_reflections());

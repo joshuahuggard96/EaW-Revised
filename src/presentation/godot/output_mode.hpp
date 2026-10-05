@@ -43,4 +43,13 @@ inline constexpr float default_backdrop_reflections = 3.0F;
     return strength;
 }
 
+// The remastered additive glows' brightness (--eawr-glow): 1 is the retail
+// colour in linear light; above 1 engines and lights bloom.
+inline constexpr float default_glow = 3.0F;
+
+[[nodiscard]] inline float& glow_strength() noexcept {
+    static float strength = default_glow;
+    return strength;
+}
+
 } // namespace eawr::presentation::godot_backend
