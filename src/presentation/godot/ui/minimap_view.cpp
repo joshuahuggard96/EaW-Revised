@@ -1,9 +1,11 @@
 #include "minimap_view.hpp"
 
+#include <godot_cpp/classes/canvas_item_material.hpp>
 #include <godot_cpp/classes/image.hpp>
 #include <godot_cpp/classes/input_event_mouse_button.hpp>
 #include <godot_cpp/classes/input_event_mouse_motion.hpp>
 #include <godot_cpp/classes/rendering_server.hpp>
+#include <godot_cpp/classes/time.hpp>
 #include <godot_cpp/variant/packed_byte_array.hpp>
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 
@@ -31,6 +33,17 @@ namespace model = presentation::ui;
     return Color(value.r / 255.0F, value.g / 255.0F, value.b / 255.0F, value.a / 255.0F);
 }
 
+// RadarMap.xml's move-order events: Event_Duration, the model's Color and the IDLE_00 animation's
+// growth per second (corner bones from 9.84 to 19.69 or 29.53 model units over 30 frames).
+constexpr double ping_seconds = 0.8;
+constexpr double ping_half_size = 0.05;
+[[nodiscard]] double ping_growth(const EawrMinimap::PingKind kind) {
+    return kind == EawrMinimap::PingKind::attack_move ? 2.0 : 1.0;
+}
+[[nodiscard]] Color ping_colour(const EawrMinimap::PingKind kind) {
+    return kind == EawrMinimap::PingKind::attack_move ? Color(1.0F, 0.0F, 0.0F, 1.0F) : Color(0.0F, 1.0F, 0.0F, 1.0F);
+}
+
 } // namespace
 
 EawrMinimap::EawrMinimap() {
@@ -41,12 +54,20 @@ EawrMinimap::EawrMinimap() {
 
 EawrMinimap::~EawrMinimap() {
     if (layers_.is_valid()) RenderingServer::get_singleton()->free_rid(layers_);
+    if (ping_layer_.is_valid()) RenderingServer::get_singleton()->free_rid(ping_layer_);
+}
+
+void EawrMinimap::ping(const model::MinimapPoint point, const PingKind kind) {
+    pings_.push_back({point, kind, Time::get_singleton()->get_ticks_usec()});
+    ++pings_shown_;
+    queue_redraw();
 }
 
 void EawrMinimap::setup(Setup setup) {
     setup_ = std::move(setup);
     backdrop_ = setup_.texture && !setup_.backdrop.empty() ? setup_.texture(setup_.backdrop) : Ref<Texture2D>();
     backdrop_tiles_.unref();
+    ping_texture_ = setup_.texture ? setup_.texture("i_death_target.tga") : Ref<Texture2D>();
     if (backdrop_.is_valid()) {
         // MM-13: the grid tiles 25 times; mipmaps keep its one-texel lines faint instead of aliased.
         const Ref<Image> image = backdrop_->get_image();
@@ -203,6 +224,7 @@ void EawrMinimap::_notification(const int what) {
             laid_out_ = get_size();
             queue_redraw();
         }
+        if (!pings_.empty()) queue_redraw();
     }
 }
 
@@ -266,6 +288,7 @@ void EawrMinimap::_draw() {
     }
     draw_set_transform(Vector2(), 0.0F, Vector2(1.0F, 1.0F));
     icons_missing_ = missing;
+    draw_pings(rect);
     if (frame_.guide) {
         // The outline's lines stop at the minimap's edge, as the engine's radar viewport cuts them.
         const auto& corners = *frame_.guide;
@@ -273,6 +296,46 @@ void EawrMinimap::_draw() {
             const auto segment = model::minimap_clip(corners[index], corners[(index + 1) % corners.size()]);
             if (!segment) continue;
             draw_line(to_screen((*segment)[0]), to_screen((*segment)[1]), Color(1.0F, 1.0F, 1.0F, 1.0F), 1.0F, false);
+        }
+    }
+}
+
+void EawrMinimap::draw_pings(const Rect2& rect) {
+    RenderingServer* server = RenderingServer::get_singleton();
+    if (!ping_layer_.is_valid()) {
+        ping_layer_ = server->canvas_item_create();
+        server->canvas_item_set_parent(ping_layer_, get_canvas_item());
+        Ref<CanvasItemMaterial> additive;
+        additive.instantiate();
+        additive->set_blend_mode(CanvasItemMaterial::BLEND_MODE_ADD);
+        ping_material_ = additive;
+        server->canvas_item_set_material(ping_layer_, ping_material_->get_rid());
+        server->canvas_item_set_clip(ping_layer_, true);
+        server->canvas_item_set_custom_rect(ping_layer_, true, rect);
+    }
+    server->canvas_item_clear(ping_layer_);
+    server->canvas_item_set_custom_rect(ping_layer_, true, rect);
+    const std::uint64_t now = Time::get_singleton()->get_ticks_usec();
+    std::erase_if(pings_, [now](const Ping& ping) {
+        return static_cast<double>(now - ping.started_usec) / 1e6 >= ping_seconds;
+    });
+    for (const Ping& ping : pings_) {
+        const double age = static_cast<double>(now - ping.started_usec) / 1e6;
+        const double half = ping_half_size * (1.0 + ping_growth(ping.kind) * age);
+        const Vector2 centre = to_screen(ping.centre);
+        const float half_x = static_cast<float>(half / 2.0) * rect.size.x;
+        const float half_y = static_cast<float>(half / 2.0) * rect.size.y;
+        const Rect2 square(centre.x - half_x, centre.y - half_y, half_x * 2.0F, half_y * 2.0F);
+        if (ping_texture_.is_valid()) {
+            server->canvas_item_add_texture_rect(ping_layer_, square, ping_texture_->get_rid(), false, ping_colour(ping.kind));
+        } else {
+            const Color line = ping_colour(ping.kind);
+            const Vector2 a = square.position, b = square.position + Vector2(square.size.x, 0.0F);
+            const Vector2 c = square.get_end(), d = square.position + Vector2(0.0F, square.size.y);
+            server->canvas_item_add_line(ping_layer_, a, b, line);
+            server->canvas_item_add_line(ping_layer_, b, c, line);
+            server->canvas_item_add_line(ping_layer_, c, d, line);
+            server->canvas_item_add_line(ping_layer_, d, a, line);
         }
     }
 }
@@ -293,7 +356,8 @@ std::string EawrMinimap::report_json() const {
                   return rows.str();
               }() << "]"
            << ", \"fog\": {\"width\": " << fog_width_ << ", \"height\": " << fog_height_ << ", \"passes\": " << fog_pass_
-           << "}, \"looks\": " << looks_ << ", \"drags\": " << drags_ << ", \"moves\": " << moves_ << ", \"guide\": ";
+           << "}, \"looks\": " << looks_ << ", \"drags\": " << drags_ << ", \"moves\": " << moves_ << ", \"pings\": " << pings_shown_
+           << ", \"ping_texture\": " << (ping_texture_.is_valid() ? "true" : "false") << ", \"guide\": ";
     if (frame_.guide) {
         output << "[";
         for (std::size_t index = 0; index < frame_.guide->size(); ++index) {

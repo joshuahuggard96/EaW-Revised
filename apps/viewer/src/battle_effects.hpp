@@ -118,6 +118,10 @@ public:
         const UnitLookup& units, const FixedCamera& camera, double presented_tick, const SnapshotAt& snapshot_at);
     // #638: the pool the particle systems step on (null: the main thread alone); it must outlive
     // this object's frames.
+    // A move order's acknowledgement in the world (GameConstants GUI_*_Command_Ack_Effect) at a source
+    // point, `scale` times its authored size (GUI_Move_Acknowledge_Scale_Space, 5 in FoC), born at the
+    // effect clock's present. False when the particle backend failed (failure() set).
+    [[nodiscard]] bool acknowledge_move(const std::string& particle, const std::array<double, 3>& position, float scale);
     void set_workers(const particles::StepExecutor* workers) noexcept { registry_->set_executor(workers); }
     [[nodiscard]] core::Result<void> set_particle_detail(const particles::ParticleDetail detail) {
         return registry_->set_detail(detail);

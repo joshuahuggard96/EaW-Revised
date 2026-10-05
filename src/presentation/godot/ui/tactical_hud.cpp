@@ -140,6 +140,13 @@ void TacticalHud::set_minimap(const MinimapView& view) {
     state.minimap->show(std::move(frame));
 }
 
+void TacticalHud::minimap_ping(const double x, const double y, const bool attack_move) {
+    State& state = *state_;
+    if (state.minimap == nullptr) return;
+    state.minimap->ping(model::minimap_point(state.minimap_extents, x, y),
+                        attack_move ? EawrMinimap::PingKind::attack_move : EawrMinimap::PingKind::move);
+}
+
 void TacticalHud::set_minimap_handlers(std::function<void(double, double)> look, std::function<void(double, double)> move) {
     state_->minimap_look = std::move(look);
     state_->minimap_move = std::move(move);

@@ -79,6 +79,15 @@ public:
         std::uint32_t hardpoint{sim::tactical::attack_hull};
     };
     [[nodiscard]] std::vector<Acknowledgement> take_acknowledgements();
+    // FoC's move acknowledgements at the order's point (GameConstants GUI_*_Command_Ack_Effect in the
+    // world, GUI_*_Click_Radar_Event_Name on the minimap), oldest first: a move, double-click move,
+    // attack-move or guard to a point, from the world or the minimap. Taken after each frame.
+    struct MoveMark final {
+        enum class Kind : std::uint8_t { move, double_click_move, attack_move, guard };
+        Kind kind{Kind::move};
+        std::array<double, 3> point{};  // source units, on the battle plane
+    };
+    [[nodiscard]] std::vector<MoveMark> take_move_marks();
 
     // #425: the selection as the command bar's unit cards (unit_cards.hpp), rebuilt every frame and
     // after input changes the selection. `slots` is the HUD shell's card slot count (24 in FoC).
@@ -295,6 +304,7 @@ private:
     std::vector<ScriptedPoint> scripted_points_;
     std::vector<std::string> log_;
     std::vector<Acknowledgement> acknowledgements_;
+    std::vector<MoveMark> move_marks_;
     // The drawn camera before a scripted middle gesture and on the frame after it, when the
     // camera has stepped through its events (the report's camera_samples).
     struct CameraSample final {

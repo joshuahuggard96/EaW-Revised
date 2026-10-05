@@ -200,6 +200,8 @@ public:
         bool fog{true};
     };
     void set_minimap(const MinimapView& view);
+    // A move order's radar event at source X/Y (EawrMinimap::ping); nothing before the first set_minimap().
+    void minimap_ping(double x, double y, bool attack_move);
     // What a left press or drag (look) and a right click (move) on the minimap do, in source X/Y.
     void set_minimap_handlers(std::function<void(double, double)> look, std::function<void(double, double)> move);
     // MM-07: a faction's colour from Factions.xml, for owners without a lobby colour.

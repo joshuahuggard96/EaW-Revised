@@ -328,6 +328,15 @@ void BattleInput::right_release(const std::array<float, 2> at, const ui::Modifie
         acknowledge(attacked ? Acknowledgement::Kind::attack
                              : guarding ? Acknowledgement::Kind::guard : Acknowledgement::Kind::move,
                     pick.entity, pick.hardpoint);
+        // An order on a unit (attack, or guarding one) marks no point.
+        const bool on_unit = attacked || (guarding && pick.entity != sim::invalid_entity_id && pick.own && !over_selected);
+        if (!on_unit) {
+            const auto kind = guarding ? MoveMark::Kind::guard
+                : attack_moving        ? MoveMark::Kind::attack_move
+                : right_double_click_  ? MoveMark::Kind::double_click_move
+                                       : MoveMark::Kind::move;
+            move_marks_.push_back({kind, {static_cast<double>((*point)[0]), static_cast<double>((*point)[1]), 0.0}});
+        }
     } else if (!issued) {
         ++refused_;
         note("refused: " + issued.error().message);
@@ -355,6 +364,7 @@ bool BattleInput::minimap_move(const double x, const double y, LiveSessionView& 
     std::snprintf(where, sizeof(where), "%.9g,%.9g,0", x, y);
     note("minimap move @" + std::string(where) + " tick " + std::to_string(tick));
     acknowledge(Acknowledgement::Kind::move);
+    move_marks_.push_back({MoveMark::Kind::move, {x, y, 0.0}});
     return true;
 }
 
@@ -468,6 +478,10 @@ void BattleInput::acknowledge(const Acknowledgement::Kind kind, const sim::Entit
     // acknowledgements' highest ranking object).
     if (selection_.empty()) return;
     acknowledgements_.push_back({kind, selection_.units(), target, hardpoint});
+}
+
+std::vector<BattleInput::MoveMark> BattleInput::take_move_marks() {
+    return std::exchange(move_marks_, {});
 }
 
 std::vector<BattleInput::Acknowledgement> BattleInput::take_acknowledgements() {

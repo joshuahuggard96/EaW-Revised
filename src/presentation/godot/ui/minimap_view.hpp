@@ -16,6 +16,7 @@
 #include <godot_cpp/classes/control.hpp>
 #include <godot_cpp/classes/image_texture.hpp>
 #include <godot_cpp/classes/input_event.hpp>
+#include <godot_cpp/classes/material.hpp>
 #include <godot_cpp/classes/texture2d.hpp>
 #include <godot_cpp/variant/rid.hpp>
 
@@ -55,6 +56,12 @@ public:
     void set_fog(std::span<const std::uint8_t> texels, std::uint32_t width, std::uint32_t height, std::uint64_t pass);
     void set_hazards(std::span<const presentation::ui::MinimapHazard> hazards,
         const presentation::ui::MinimapExtents& extents, const presentation::ui::MinimapSettings& settings);
+    // FoC's radar map events for a move order (RadarMap.xml Default_Click, Default_Attack_Click): the
+    // model's square (BaseTexture i_death_target, additive, its Color) grows for Event_Duration
+    // (0.8 s) as its IDLE_00 animation spreads the corners: to twice its size in a second for a
+    // move, three times for an attack-move. It starts at a default blip's size (MM-06 0.05).
+    enum class PingKind : std::uint8_t { move, attack_move };
+    void ping(presentation::ui::MinimapPoint point, PingKind kind);
     void set_look(std::function<void(presentation::ui::MinimapPoint)> look) { look_ = std::move(look); }
     void set_move(std::function<void(presentation::ui::MinimapPoint)> move) { move_ = std::move(move); }
 
@@ -77,6 +84,7 @@ protected:
 
 private:
     void look_at(const godot::Vector2& at, const char* why);
+    void draw_pings(const godot::Rect2& rect);
 
     Setup setup_;
     Frame frame_;
@@ -85,6 +93,17 @@ private:
     godot::Ref<godot::ImageTexture> backdrop_tiles_;
     // Fog and backdrop, drawn behind the control's own blips and outline with repeat and mipmaps.
     godot::RID layers_;
+    // The radar events above the blips, drawn additively.
+    struct Ping final {
+        presentation::ui::MinimapPoint centre;
+        PingKind kind{PingKind::move};
+        std::uint64_t started_usec{};
+    };
+    std::vector<Ping> pings_;
+    godot::RID ping_layer_;
+    godot::Ref<godot::Material> ping_material_;
+    godot::Ref<godot::Texture2D> ping_texture_;
+    std::uint64_t pings_shown_{};
     godot::Ref<godot::ImageTexture> fog_;
     godot::Ref<godot::ImageTexture> hazards_;
     std::vector<presentation::ui::MinimapHazard> hazard_inputs_;

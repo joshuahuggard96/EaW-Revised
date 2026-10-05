@@ -52,6 +52,29 @@ const std::string* BattleEffects::hit_pick(const std::vector<std::string>& list,
     return &list[space::hit_particle_pick(projectile.value_or(space::hit_event_key(event)), kind, list.size())];
 }
 
+bool BattleEffects::acknowledge_move(const std::string& particle, const std::array<double, 3>& position,
+                                     const float scale) {
+    // The scaled copy is cached beside the authored type: sizes scale here, emitter offsets and
+    // local velocities through the basis.
+    const std::string key = particle + "@" + std::to_string(scale);
+    if (!particle_types_.contains(key)) {
+        const ParticleType* authored = particle_type(particle);
+        if (authored == nullptr) return true;
+        ParticleType scaled = *authored;
+        if (scaled.system) {
+            for (particles::EmitterDefinition& emitter : scaled.system->emitters) {
+                for (particles::ScalarKey& size : emitter.size.keys) size.value *= scale;
+            }
+        }
+        particle_types_.emplace(key, std::move(scaled));
+    }
+    const particles::Basis3 basis{{scale, 0.0F, 0.0F}, {0.0F, scale, 0.0F}, {0.0F, 0.0F, scale}};
+    const std::uint64_t birth = std::exchange(birth_, samples_);
+    const bool spawned = spawn(key, position, basis, "move_ack", samples_);
+    birth_ = birth;
+    return spawned;
+}
+
 bool BattleEffects::spawn(const std::string& particle, const std::array<double, 3>& position,
                           const particles::Basis3& basis, const std::string& reason, const std::uint64_t tick) {
     if (particle.empty()) return true;

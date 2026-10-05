@@ -370,6 +370,22 @@ bool MapMode::State::ready_space(Node3D& host, const assets::Map& map,
                             // samples they still stood in.
                             live_session->retire_clones(*population, renderer);
                             emitter_timer.finish();
+                            // FoC's move acknowledgements (GameConstants.xml): the order point's particle at
+                            // GUI_Move_Acknowledge_Scale_Space and the minimap's radar event.
+                            if (map_state->battle) {
+                                for (const BattleInput::MoveMark& mark : map_state->battle->take_move_marks()) {
+                                    using Kind = BattleInput::MoveMark::Kind;
+                                    const char* particle = mark.kind == Kind::attack_move ? "GUI_Attack_Move_Command_Particle"
+                                        : mark.kind == Kind::guard ? "GUI_Guard_Move_Command_Particle"
+                                        : mark.kind == Kind::double_click_move ? "GUI_Double_Click_Move_Command_Particle"
+                                                                               : "GUI_Move_Command_Particle";
+                                    if (effects && !effects->acknowledge_move(particle, mark.point, 5.0F)) {
+                                        return core::Result<SpaceLiveUpdate>::failure(
+                                            {.code = "EAWR-VIEWER-BATTLE-EFFECTS", .message = effects->failure()});
+                                    }
+                                    if (map_state->hud) map_state->hud->minimap_ping(mark.point[0], mark.point[1], mark.kind == Kind::attack_move);
+                                }
+                            }
                             if (!effects) return update;
                             // #80: the frame's shots, hits and explosions, from the snapshots only.
                             particle_start = ParticleClock::now();
