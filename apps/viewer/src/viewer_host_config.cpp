@@ -74,6 +74,12 @@ void ViewerHost::read_host_options(const PackedStringArray& arguments) {
                 break;
             }
             options_->reflections = utf8(arguments[++index]);
+        } else if (argument == "--eawr-glow") {
+            if (index + 1 >= arguments.size()) {
+                options_->glow_missing = true;
+                break;
+            }
+            options_->glow = utf8(arguments[++index]);
         } else if (argument == "--eawr-scene") {
             if (!take_input(options_->scene_path)) break;
         } else if (argument == "--eawr-replay") {
