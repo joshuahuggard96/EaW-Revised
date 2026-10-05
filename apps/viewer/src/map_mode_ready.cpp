@@ -583,6 +583,10 @@ bool MapMode::ready(Node3D& host) {
         } else {
             if (state.profile == "foc") {
                 if (!std::filesystem::is_directory(expansion)) return state.fail_ready("the FoC profile requires corruption/Data");
+                // An explicit FoC profile mounts a mod chain over the expansion,
+                // as FoC's MODPATH does, keeping the FoC catalog (for example a
+                // local folder of upscaled textures).
+                for (const auto& layer : eawr::vfs::mod_chain_roots(state.options.mod_root)) roots.push_back(layer);
                 roots.emplace_back("expansion", expansion);
             }
             roots.emplace_back("base", base);

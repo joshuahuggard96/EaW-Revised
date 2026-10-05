@@ -132,10 +132,10 @@ bool SkirmishSetupMode::State::load() {
     }
     const std::string profile = options.profile.empty() ? (options.mod_root.empty() ? "foc" : "remake") : options.profile;
     if (profile != "foc" && profile != "remake") { failure = "Skirmish setup requires the FoC or mod profile."; return false; }
-    if (profile == "remake") {
-        if (options.mod_root.empty()) { failure = "The mod profile requires a mod root."; return false; }
-        roots = vfs::mod_chain_roots(options.mod_root);
-    }
+    if (profile == "remake" && options.mod_root.empty()) { failure = "The mod profile requires a mod root."; return false; }
+    // A mod chain mounts over the expansion in both profiles; the FoC profile
+    // keeps the FoC catalog, as FoC's MODPATH does.
+    roots = vfs::mod_chain_roots(options.mod_root);
     roots.emplace_back("expansion", expansion);
     roots.emplace_back("base", base);
     auto chain = vfs::resolve_manifest_chain(roots);
