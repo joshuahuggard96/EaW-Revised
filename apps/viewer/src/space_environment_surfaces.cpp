@@ -161,6 +161,8 @@ void EnvironmentView::upload(Item item, const space::SceneSurface& surface, cons
     // An environment surface never casts: the sky encloses the scene, and the
     // backdrop objects sit far outside any shadow the scene would use.
     renderer_->set_casts_shadows(asset, false);
+    // Every environment surface is backdrop for the remastered reflections.
+    renderer_->set_backdrop(asset);
     assets_.push_back(asset);
     if (surface.route == space::SceneRoute::planet || surface.route == space::SceneRoute::nebula) {
         effect_clock_assets_.push_back(asset);

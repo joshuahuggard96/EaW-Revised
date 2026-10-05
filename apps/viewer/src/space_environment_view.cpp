@@ -588,6 +588,10 @@ std::optional<int> EnvironmentView::process(const double delta) {
     renderer_->submit(snapshot_);
     submit_since(submit_start);
     submit_sent_ = renderer_->submit_work().transforms_sent - sent_before;
+    // Remastered reflections: the backdrop is static, so one capture around
+    // the second frame's eye serves the whole battle.
+    if (frame_ == 2) renderer_->capture_backdrop(camera_.eye);
+    renderer_->update_backdrop();
     if (live.capture_suffix && !options_.capture_path.empty()) {
         std::filesystem::path path = options_.capture_path;
         path.replace_filename(ViewerPath{ViewerPath::utf8(path.stem()) + *live.capture_suffix
