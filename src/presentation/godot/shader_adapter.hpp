@@ -608,6 +608,60 @@ vec3 eawr_stored_albedo(vec3 stored_rgb) {
     return source;
 }
 
+// Linear output (output_mode.hpp): the exact sRGB decode of a stored result.
+// Only negatives are clamped, so an overbright additive or specular term
+// stays above 1 for the tonemapper and glow instead of saturating.
+inline constexpr std::string_view linear_output_decoder = R"GODOT(
+vec3 eawr_linear_output(vec3 stored_rgb) {
+    vec3 nonnegative = max(stored_rgb, vec3(0.0));
+    return mix(pow((nonnegative + 0.055) / 1.055, vec3(2.4)), nonnegative / 12.92,
+        lessThanEqual(nonnegative, vec3(0.04045)));
+}
+)GODOT";
+
+// A spatial shader that already writes linear light carries this marker
+// and is compiled as written.
+inline constexpr std::string_view linear_source_marker = "// eawr:linear-output";
+
+// `source` as the linear output mode compiles it: a spatial shader decodes
+// ALBEDO at every exit of fragment(). Unchanged: non-spatial shaders (UI),
+// marked linear sources, shaders that read the screen texture (it already
+// holds linear light, e.g. the heat distortion), and shaders without a
+// fragment(). nullopt when fragment()'s braces do not balance.
+[[nodiscard]] inline std::optional<std::string> linear_output_source(std::string source) {
+    if (source.find("shader_type spatial") == std::string::npos
+        || source.find(linear_source_marker) != std::string::npos
+        || source.find("hint_screen_texture") != std::string::npos) {
+        return source;
+    }
+    constexpr std::string_view signature = "void fragment()";
+    const std::size_t function = source.find(signature);
+    if (function == std::string::npos) return source;
+    const std::size_t open = source.find('{', function + signature.size());
+    if (open == std::string::npos) return std::nullopt;
+    std::size_t close = std::string::npos;
+    int depth = 0;
+    for (std::size_t at = open; at < source.size(); ++at) {
+        if (source[at] == '{') ++depth;
+        if (source[at] == '}' && --depth == 0) {
+            close = at;
+            break;
+        }
+    }
+    if (close == std::string::npos) return std::nullopt;
+    constexpr std::string_view decode = "ALBEDO = eawr_linear_output(ALBEDO);";
+    std::string body = source.substr(open, close - open);
+    for (std::size_t at = body.find("return;"); at != std::string::npos; at = body.find("return;", at)) {
+        const std::string guarded = "{ " + std::string(decode) + " return; }";
+        body.replace(at, 7, guarded);
+        at += guarded.size();
+    }
+    body += "    " + std::string(decode) + "\n";
+    source.replace(open, close - open, body);
+    source.insert(function, std::string(linear_output_decoder).substr(1) + "\n");
+    return source;
+}
+
 struct SphChannelMatrix final {
     // Column-major logical 4x4 matrix, matching Godot's mat4 representation.
     std::array<std::array<float, 4>, 4> columns{};

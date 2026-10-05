@@ -13,9 +13,13 @@
 // the terrain sample linear like the retail TerrainRenderBump samplers. There
 // is no player setting until M6 (D1 = C); `--eawr-render-profile retail|enhanced`
 // is an internal switch for evidence runs.
+//
+// remastered (opt-in, never a default) is the enhanced profile with a linear
+// frame (output_mode.hpp): Godot's tonemapper, glow and lit materials instead
+// of the stored-value retail colour policy. It is not a retail look.
 namespace eawr::presentation::godot_backend {
 
-enum class RenderProfile { retail, enhanced };
+enum class RenderProfile { retail, enhanced, remastered };
 
 // Fixed view-depth budgets: camera motion must not change cascade scale.
 // Godot 4.7.2 fits each split to a sphere and snaps its light-space bounds.
@@ -29,12 +33,10 @@ struct ShadowSettings final {
 [[nodiscard]] constexpr ShadowSettings shadow_settings(const RenderProfile profile, const bool space) noexcept {
     // Keep the near three split depths identical in land and space. Space's
     // longer last cascade must not spend close-up texels on its distant sky.
-    auto offsets = profile == RenderProfile::enhanced ? std::array{0.0625F, 0.1875F, 0.5F}
-                                                     : std::array{0.125F, 0.25F, 0.5F};
+    const bool enhanced = profile != RenderProfile::retail;
+    auto offsets = enhanced ? std::array{0.0625F, 0.1875F, 0.5F} : std::array{0.125F, 0.25F, 0.5F};
     if (space) for (float& offset : offsets) offset *= 0.5F;
-    return {profile == RenderProfile::enhanced ? 8192 : 4096,
-        offsets,
-        space ? 8192.0F : 4096.0F, profile == RenderProfile::enhanced};
+    return {enhanced ? 8192 : 4096, offsets, space ? 8192.0F : 4096.0F, enhanced};
 }
 
 // What a profile asks of the root viewport. Zero turns a feature off.
@@ -47,28 +49,45 @@ struct RenderSettings final {
 };
 
 [[nodiscard]] constexpr RenderSettings render_settings(const RenderProfile profile) noexcept {
-    return profile == RenderProfile::enhanced ? RenderSettings{4, true, 16} : RenderSettings{};
+    return profile != RenderProfile::retail ? RenderSettings{4, true, 16} : RenderSettings{};
 }
 
 [[nodiscard]] constexpr std::string_view render_profile_name(const RenderProfile profile) noexcept {
-    return profile == RenderProfile::enhanced ? "enhanced" : "retail";
+    switch (profile) {
+    case RenderProfile::enhanced: return "enhanced";
+    case RenderProfile::remastered: return "remastered";
+    case RenderProfile::retail: break;
+    }
+    return "retail";
 }
 
 [[nodiscard]] constexpr std::optional<RenderProfile> parse_render_profile(const std::string_view text) noexcept {
     if (text == "retail") return RenderProfile::retail;
     if (text == "enhanced") return RenderProfile::enhanced;
+    if (text == "remastered") return RenderProfile::remastered;
     return std::nullopt;
+}
+
+// A plain decimal number within [low, high], or nullopt.
+[[nodiscard]] inline std::optional<float> parse_bounded(
+    const std::string_view text, const float low, const float high) noexcept {
+    float value{};
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (error != std::errc{} || end != text.data() + text.size() || !(value >= low && value <= high)) {
+        return std::nullopt;
+    }
+    return value;
 }
 
 // --eawr-render-scale: the 3D resolution as a multiple of the window's.
 // Above 1 supersamples, below 1 trades sharpness for speed on weak GPUs.
 [[nodiscard]] inline std::optional<float> parse_render_scale(const std::string_view text) noexcept {
-    float scale{};
-    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), scale);
-    if (error != std::errc{} || end != text.data() + text.size() || !(scale >= 0.5F && scale <= 2.0F)) {
-        return std::nullopt;
-    }
-    return scale;
+    return parse_bounded(text, 0.5F, 2.0F);
+}
+
+// --eawr-exposure: the remastered frame's tonemapper exposure.
+[[nodiscard]] inline std::optional<float> parse_exposure(const std::string_view text) noexcept {
+    return parse_bounded(text, 0.25F, 4.0F);
 }
 
 // The run facts that pick the default profile.

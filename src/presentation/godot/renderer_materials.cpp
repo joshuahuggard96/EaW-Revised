@@ -1,5 +1,6 @@
 #include "eawr/core/load_profile.hpp"
 #include "renderer_upload_internal.hpp"
+#include "stored_output.hpp"
 
 namespace eawr::presentation::godot_backend {
 namespace {
@@ -33,10 +34,14 @@ namespace {
     if (position == std::string_view::npos) return std::nullopt;
     std::string result(source);
     result.replace(position, unshaded.size(), "render_mode ambient_light_disabled,");
+    // The floor scales stored values. A linear frame (output_mode.hpp) lights
+    // the decoded ALBEDO, where the same darkening is the factor's power 2.2.
     result += "\nuniform vec3 eawr_shadow_floor = vec3(0.5);\n"
-              "void light() {\n"
-              "    DIFFUSE_LIGHT += mix(eawr_shadow_floor, vec3(1.0), ATTENUATION);\n"
-              "}\n";
+              "void light() {\n";
+    result += stored_output::linear()
+        ? "    DIFFUSE_LIGHT += pow(mix(eawr_shadow_floor, vec3(1.0), ATTENUATION), vec3(2.2));\n"
+        : "    DIFFUSE_LIGHT += mix(eawr_shadow_floor, vec3(1.0), ATTENUATION);\n";
+    result += "}\n";
     return result;
 }
 
