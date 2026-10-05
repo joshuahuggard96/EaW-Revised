@@ -36,7 +36,9 @@ struct ShadowSettings final {
     const bool enhanced = profile != RenderProfile::retail;
     auto offsets = enhanced ? std::array{0.0625F, 0.1875F, 0.5F} : std::array{0.125F, 0.25F, 0.5F};
     if (space) for (float& offset : offsets) offset *= 0.5F;
-    return {enhanced ? 8192 : 4096, offsets, space ? 8192.0F : 4096.0F, enhanced};
+    // Space's enhanced atlas is 16k: its biases scale with the texel size and
+    // erased zoomed-out self-shadowing at 8k (space_populate.cpp), for 0.5 GiB.
+    return {enhanced ? (space ? 16384 : 8192) : 4096, offsets, space ? 8192.0F : 4096.0F, enhanced};
 }
 
 // What a profile asks of the root viewport. Zero turns a feature off.

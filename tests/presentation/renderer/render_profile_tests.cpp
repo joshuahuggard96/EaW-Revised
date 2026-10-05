@@ -69,7 +69,9 @@ void shadow_budgets_are_bounded_and_ordered() {
             }
             check(settings.max_distance >= 4096.0F && settings.max_distance <= 8192.0F,
                   "tactical reach stays within the fixed land/space budget");
-            check(settings.atlas_size <= 8192 && settings.atlas_size >= 4096,
+            // Godot's directional atlas limit; only enhanced space uses 16k.
+            check(settings.atlas_size <= (space && profile != RenderProfile::retail ? 16384 : 8192)
+                      && settings.atlas_size >= 4096,
                   "atlas stays within the supported GPU budget");
         }
     }
