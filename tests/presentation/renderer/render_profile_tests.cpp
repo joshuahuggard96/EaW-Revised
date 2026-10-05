@@ -9,6 +9,7 @@ namespace {
 
 using eawr::presentation::godot_backend::default_render_profile;
 using eawr::presentation::godot_backend::parse_render_profile;
+using eawr::presentation::godot_backend::parse_exposure;
 using eawr::presentation::godot_backend::parse_render_scale;
 using eawr::presentation::godot_backend::render_profile_name;
 using eawr::presentation::godot_backend::render_settings;
@@ -29,13 +30,15 @@ void settings_follow_the_owner_decision() {
           "retail has no MSAA, no screen-space AA and no anisotropic filtering");
     check(render_settings(RenderProfile::enhanced) == RenderSettings{4, true, 16},
           "enhanced is 4x MSAA, SMAA and 16x anisotropic filtering");
+    check(render_settings(RenderProfile::remastered) == render_settings(RenderProfile::enhanced),
+          "remastered keeps the enhanced viewport settings; only the output mode differs");
 }
 
 void names_round_trip() {
-    for (const RenderProfile profile : {RenderProfile::retail, RenderProfile::enhanced}) {
+    for (const RenderProfile profile : {RenderProfile::retail, RenderProfile::enhanced, RenderProfile::remastered}) {
         check(parse_render_profile(render_profile_name(profile)) == profile, "a profile name parses back");
     }
-    for (const std::string_view bad : {"", "Retail", "ENHANCED", "off", "retail "}) {
+    for (const std::string_view bad : {"", "Retail", "ENHANCED", "off", "retail ", "Remastered"}) {
         check(!parse_render_profile(bad), "only the exact lower-case names parse");
     }
 }
@@ -46,6 +49,11 @@ void render_scales_parse_within_bounds() {
     check(parse_render_scale("0.5") == 0.5F && parse_render_scale("2") == 2.0F, "both bounds are accepted");
     for (const std::string_view bad : {"", "0.49", "2.01", "-1", "x", "1.5x", " 1", "nan", "inf"}) {
         check(!parse_render_scale(bad), "only a plain number from 0.5 to 2 parses");
+    }
+    check(parse_exposure("1.5") == 1.5F && parse_exposure("0.25") == 0.25F && parse_exposure("4") == 4.0F,
+          "exposures from 0.25 to 4 parse");
+    for (const std::string_view bad : {"", "0.2", "4.5", "-1", "bright"}) {
+        check(!parse_exposure(bad), "only a plain number from 0.25 to 4 is an exposure");
     }
 }
 
