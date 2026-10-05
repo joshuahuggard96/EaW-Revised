@@ -208,6 +208,9 @@ void GodotRenderer::Impl::set_lighting(const GodotRenderer::LightingState& light
     case GodotRenderer::ShadowFilter::soft_high:
         rendering->directional_soft_shadow_filter_set_quality(RenderingServer::SHADOW_QUALITY_SOFT_HIGH);
         break;
+    case GodotRenderer::ShadowFilter::soft_ultra:
+        rendering->directional_soft_shadow_filter_set_quality(RenderingServer::SHADOW_QUALITY_SOFT_ULTRA);
+        break;
     }
     if (lighting.shadow_bias) {
         rendering->light_set_param(sun_light_, RenderingServer::LIGHT_PARAM_SHADOW_BIAS, *lighting.shadow_bias);

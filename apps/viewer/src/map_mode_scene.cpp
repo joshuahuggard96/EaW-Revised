@@ -873,7 +873,7 @@ GodotRenderer::LightingState MapMode::State::lighting_state(
     state.shadow_max_distance = max_distance;
     const auto quality = shadow_settings(active_render_profile(), false);
     state.shadow_atlas_size = quality.atlas_size;
-    state.shadow_filter = quality.high_filter ? GodotRenderer::ShadowFilter::soft_high
+    state.shadow_filter = quality.high_filter ? GodotRenderer::ShadowFilter::soft_ultra
                                             : GodotRenderer::ShadowFilter::soft_medium;
     // Land shadows (#150): four blended cascades weighted toward the camera,
     // so close tactical zooms get fine texels, and a normal bias that clears

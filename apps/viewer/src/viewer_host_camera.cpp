@@ -203,6 +203,17 @@ namespace {
     return nullptr;
 }
 
+// F11, or Alt+Enter, pressed without other modifiers: the fullscreen toggle.
+[[nodiscard]] bool fullscreen_toggle(const Ref<InputEvent>& event) {
+    const auto* key = Object::cast_to<InputEventKey>(event.ptr());
+    if (!key || !key->is_pressed() || key->is_echo() || key->is_shift_pressed() || key->is_ctrl_pressed()
+        || key->is_meta_pressed()) {
+        return false;
+    }
+    const Key code = key->get_physical_keycode() != KEY_NONE ? key->get_physical_keycode() : key->get_keycode();
+    return key->is_alt_pressed() ? code == KEY_ENTER || code == KEY_KP_ENTER : code == KEY_F11;
+}
+
 } // namespace
 
 bool ViewerHost::start_camera_interaction() {
@@ -278,6 +289,14 @@ void ViewerHost::on_map_viewport_size_changed() {
 }
 
 void ViewerHost::_input(const Ref<InputEvent>& event) {
+    // A player's view switches between its window and borderless fullscreen;
+    // captures and probes keep the window size they pinned.
+    if (options_->camera_interactive && options_->capture_path.empty() && fullscreen_toggle(event)) {
+        Window& window = *get_window();
+        window.set_mode(window.get_mode() == Window::MODE_WINDOWED ? Window::MODE_FULLSCREEN : Window::MODE_WINDOWED);
+        get_viewport()->set_input_as_handled();
+        return;
+    }
     sync_modal_holds();
     std::uint32_t button{};
     const auto input = input_class(event, button);

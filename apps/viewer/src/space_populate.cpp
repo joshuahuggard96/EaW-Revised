@@ -107,7 +107,7 @@ using TeamColour = std::optional<std::array<std::uint8_t, 3>>;
     state.shadow_max_distance = max_distance;
     const auto quality = shadow_settings(active_render_profile(), true);
     state.shadow_atlas_size = quality.atlas_size;
-    state.shadow_filter = quality.high_filter ? GodotRenderer::ShadowFilter::soft_high
+    state.shadow_filter = quality.high_filter ? GodotRenderer::ShadowFilter::soft_ultra
                                             : GodotRenderer::ShadowFilter::soft_medium;
     // Four blended cascades keep the profile's near split depths while the
     // last cascade covers space's longer reach (#231). Preserve the #150
@@ -117,6 +117,16 @@ using TeamColour = std::optional<std::array<std::uint8_t, 3>>;
     state.shadow_blend_splits = true;
     state.shadow_bias = 2.0F;
     state.shadow_normal_bias = 5.0F;
+    // Without a blur RenderingServer turns the soft filter off, so space
+    // shadows were hard-edged in every profile. The enhanced profile softens
+    // them; retail captures keep the hard edge. Half of land's blur: space's
+    // wide cascades made blur 1 wash thin hull shadows out at tactical zoom.
+    // Godot scales the depth bias by the blur too, so the bias above only
+    // takes effect here: land's small bias keeps hulls self-shadowing.
+    if (quality.high_filter) {
+        state.shadow_blur = 0.5F;
+        state.shadow_bias = 0.05F;
+    }
     lighting::IrradianceMatrices matrices;
     lighting::IrradianceMatrices fill;
     lighting::Vec3 toward{};

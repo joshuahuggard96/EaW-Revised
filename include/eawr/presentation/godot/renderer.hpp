@@ -224,7 +224,7 @@ public:
     // cannot restore a default on a live light, so set_lighting replaces a
     // previously tuned light when a later state leaves either bias unset.
     enum class ShadowLayout : std::uint8_t { orthogonal, parallel_2_splits, parallel_4_splits };
-    enum class ShadowFilter : std::uint8_t { soft_low, soft_medium, soft_high };
+    enum class ShadowFilter : std::uint8_t { soft_low, soft_medium, soft_high, soft_ultra };
     struct LightingState final {
         std::array<std::array<float, 16>, 3> sph{};
         // SPH_LIGHT_FILL (the two fill lights and ambient, without the sun)
@@ -447,6 +447,7 @@ private:
     case GodotRenderer::ShadowFilter::soft_low: return "soft_low";
     case GodotRenderer::ShadowFilter::soft_medium: return "soft_medium";
     case GodotRenderer::ShadowFilter::soft_high: return "soft_high";
+    case GodotRenderer::ShadowFilter::soft_ultra: return "soft_ultra";
     }
     return "unknown";
 }
