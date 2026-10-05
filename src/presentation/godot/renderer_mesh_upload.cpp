@@ -110,6 +110,14 @@ namespace {
         }
         offset += mip.bytes.size();
     }
+    // A BGRA DDS keeps its stored channel order (assets reader); Godot has no
+    // BGRA format, so swap red and blue into RGBA8 as the UI and particle
+    // uploads do. Unswapped, colours took the wrong tint and normal maps
+    // pointed sideways, which turned bump-mapped hulls black.
+    if (source.format == assets::PixelFormat::bgra8) {
+        uint8_t* pixel = bytes.ptrw();
+        for (std::size_t at = 0; at + 3 < byte_count; at += 4) std::swap(pixel[at], pixel[at + 2]);
+    }
     const Ref<Image> image = Image::create_from_data(
         static_cast<int32_t>(source.width), static_cast<int32_t>(source.height),
         source.mips.size() > 1, format, bytes);
