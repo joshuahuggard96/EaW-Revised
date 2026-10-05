@@ -123,13 +123,14 @@ using TeamColour = std::optional<std::array<std::uint8_t, 3>>;
     // by the blur, and both biases by the cascade's texel size, so a ship
     // zoomed out to the third cascade lost most of its self-shadowing (M2
     // frigate at zoom 0.9: 5.6% darkening against 16% close up). The 16k
-    // atlas (render_profile.hpp) halves the texels, and these biases keep 10%
-    // there without acne at the closest zoom; normal bias 0.2 or bias 0.005
-    // stippled the hull close up.
+    // atlas (render_profile.hpp) halves the texels; these biases keep 6.8%
+    // there. Lower ones keep more (normal bias 0.5 with bias 0.01: 9.3%) but
+    // grid lit hulls with acne at 2x render scale, and more blur does not
+    // hide it (shadow / no-shadow ratio maps of the M2 frigate).
     if (quality.high_filter) {
         state.shadow_blur = 0.3F;
-        state.shadow_bias = 0.01F;
-        state.shadow_normal_bias = 0.5F;
+        state.shadow_bias = 0.05F;
+        state.shadow_normal_bias = 2.0F;
     }
     lighting::IrradianceMatrices matrices;
     lighting::IrradianceMatrices fill;
