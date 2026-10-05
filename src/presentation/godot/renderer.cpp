@@ -323,7 +323,11 @@ void GodotRenderer::Impl::set_backdrop(const sim::AssetId asset_id) {
 
 void GodotRenderer::Impl::capture_backdrop(const std::array<float, 3>& eye) {
     RenderingServer* rendering = RenderingServer::get_singleton();
-    if (!rendering || !stored_output::linear() || backdrop_capture_ || !scenario_.is_valid()) return;
+    // No reflection strength, nothing to capture.
+    if (!rendering || !stored_output::linear() || backdrop_reflections() <= 0.0F || backdrop_capture_
+        || !scenario_.is_valid()) {
+        return;
+    }
     BackdropCapture capture;
     // Linear light out, untonemapped: the 8-bit viewport stores it sRGB
     // encoded and the hull's source_color sampler decodes it. An empty
