@@ -10,6 +10,7 @@ namespace {
 using eawr::presentation::godot_backend::default_render_profile;
 using eawr::presentation::godot_backend::parse_render_profile;
 using eawr::presentation::godot_backend::parse_exposure;
+using eawr::presentation::godot_backend::parse_glow;
 using eawr::presentation::godot_backend::parse_reflections;
 using eawr::presentation::godot_backend::parse_render_scale;
 using eawr::presentation::godot_backend::render_profile_name;
@@ -60,6 +61,10 @@ void render_scales_parse_within_bounds() {
           "reflection strengths from 0 to 4 parse");
     for (const std::string_view bad : {"", "-0.5", "4.5", "shiny"}) {
         check(!parse_reflections(bad), "only a plain number from 0 to 4 is a reflection strength");
+    }
+    check(parse_glow("0.5") == 0.5F && parse_glow("3") == 3.0F && parse_glow("8") == 8.0F, "glows from 0.5 to 8 parse");
+    for (const std::string_view bad : {"", "0.4", "8.5", "bright"}) {
+        check(!parse_glow(bad), "only a plain number from 0.5 to 8 is a glow strength");
     }
 }
 

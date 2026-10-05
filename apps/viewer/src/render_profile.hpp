@@ -92,6 +92,11 @@ struct RenderSettings final {
     return parse_bounded(text, 0.0F, 4.0F);
 }
 
+// --eawr-glow: the remastered additive glows' brightness.
+[[nodiscard]] inline std::optional<float> parse_glow(const std::string_view text) noexcept {
+    return parse_bounded(text, 0.5F, 8.0F);
+}
+
 // --eawr-exposure: the remastered frame's tonemapper exposure.
 [[nodiscard]] inline std::optional<float> parse_exposure(const std::string_view text) noexcept {
     return parse_bounded(text, 0.25F, 4.0F);

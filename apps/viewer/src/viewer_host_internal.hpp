@@ -97,6 +97,9 @@ struct ViewerHost::Options final {
     // --eawr-reflections: the remastered hulls' backdrop reflection strength.
     std::string reflections;
     bool reflections_missing{};
+    // --eawr-glow: the remastered additive glows' brightness.
+    std::string glow;
+    bool glow_missing{};
     ViewerPath scene_path{std::string{"res://common/scene.json"}};
     ViewerPath replay_path{std::string{"res://common/original-v1.eawr-replay"}};
     std::string model_path{default_model_path};

@@ -4,6 +4,7 @@
 #include "eawr/presentation/renderer.hpp"
 
 #include "legacy/registry.hpp"
+#include "remastered_materials.hpp"
 #include "shader_adapter.hpp"
 #include "../../../apps/viewer/src/family_textures.hpp"
 
@@ -952,6 +953,44 @@ void linear_output_contracts() {
         "an unbalanced fragment() has no linear form");
 }
 
+// The remastered materials (remastered_materials.hpp): each selector gets a
+// Godot-lit source that writes linear light itself, so the linear output
+// transform leaves it as written; every other program keeps its adapter.
+void remastered_material_contracts() {
+    namespace remastered = godot_backend::remastered_materials;
+    const auto material = [](const std::string program, const std::string technique, const RenderPass pass) {
+        MaterialDescription description;
+        description.program = program;
+        description.technique = technique;
+        description.pass_name = technique + "_p0";
+        description.pass = pass;
+        return description;
+    };
+    const std::tuple<std::string, std::string, RenderPass, bool> cases[]{
+        {"MeshBumpColorize.fx", "sph_t2", RenderPass::opaque, true},
+        {"RSkinBumpColorize.fx", "sph_t2", RenderPass::opaque, true},
+        {"MeshGlossColorize.fx", "sph_t0", RenderPass::opaque, true},
+        {"MeshGloss.fx", "sph_t0", RenderPass::opaque, true},
+        {"RSkinGloss.fx", "sph_t1", RenderPass::opaque, true},
+        {"RSkinGlossColorize.fx", "sph_t0", RenderPass::opaque, true},
+        {"MeshAlpha.fx", "sph_t1", RenderPass::transparent, true},
+        {"MeshAdditive.fx", "t0", RenderPass::transparent, true},
+        {"MeshGloss.fx", "sph_t0", RenderPass::transparent, false},
+        {"MeshAlphaGloss.fx", "sph_t0", RenderPass::transparent, false},
+        {"Tree.fx", "sph_t1", RenderPass::opaque, false},
+    };
+    for (const auto& [program, technique, pass, remastered_expected] : cases) {
+        const std::string name = program + " " + technique + " (" + std::string(to_string(pass)) + ")";
+        const std::string source(remastered::shader_source(material(program, technique, pass)));
+        check(source.empty() != remastered_expected, name + " has a remastered source exactly when expected");
+        if (source.empty()) continue;
+        check(source.find(godot_backend::linear_source_marker) != std::string::npos
+                && godot_backend::linear_output_source(source) == source,
+            name + " writes linear light itself and is never decoded twice");
+        check(source.find("BaseTexture") != std::string::npos, name + " declares BaseTexture, the compile probe");
+    }
+}
+
 int main() {
     texture_placeholder_contracts();
     registry_contracts();
@@ -965,6 +1004,7 @@ int main() {
     bump_colorize_contracts();
     dx8_mesh_contracts();
     linear_output_contracts();
+    remastered_material_contracts();
     if (failures != 0) {
         std::cerr << failures << " legacy family contract(s) failed\n";
         return EXIT_FAILURE;

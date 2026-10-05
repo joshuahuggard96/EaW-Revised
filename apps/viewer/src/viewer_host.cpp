@@ -171,6 +171,12 @@ void ViewerHost::_ready() {
                 break;
             }
             options_->reflections = utf8(arguments[++index]);
+        } else if (argument == "--eawr-glow") {
+            if (index + 1 >= arguments.size()) {
+                options_->glow_missing = true;
+                break;
+            }
+            options_->glow = utf8(arguments[++index]);
         } else if (argument == "--eawr-scene") {
             if (!take_input(options_->scene_path)) break;
         } else if (argument == "--eawr-replay") {
@@ -314,6 +320,16 @@ void ViewerHost::_ready() {
         return;
     }
     backdrop_reflections() = *reflections;
+    const std::optional<float> glow = options_->glow.empty() ? std::optional<float>{default_glow}
+                                                             : parse_glow(options_->glow);
+    if (options_->glow_missing || !glow || (!options_->glow.empty() && render_profile != RenderProfile::remastered)) {
+        status_message_ = "--eawr-glow expects a number from 0.5 to 8 and the remastered render profile";
+        UtilityFunctions::printerr(String(status_message_.c_str()));
+        static_cast<void>(write_report("failed"));
+        stop(2);
+        return;
+    }
+    glow_strength() = *glow;
     apply_render_profile(*get_viewport(), render_profile);
     apply_render_scale(*get_viewport(), *render_scale);
 
