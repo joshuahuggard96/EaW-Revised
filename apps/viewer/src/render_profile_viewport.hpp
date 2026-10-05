@@ -49,12 +49,22 @@ namespace render_profile_detail {
     };
 }
 
+// The settings a viewport's profile asked for: a supersampled viewport has
+// MSAA off (apply_render_scale) but still matches its profile.
+[[nodiscard]] inline RenderSettings profile_settings_of(const godot::Viewport& viewport) {
+    RenderSettings settings = settings_of(viewport);
+    if (settings.msaa_samples == 0 && msaa_replaced_by_supersampling(static_cast<float>(viewport.get_scaling_3d_scale()))) {
+        settings.msaa_samples = render_settings(RenderProfile::enhanced).msaa_samples;
+    }
+    return settings;
+}
+
 } // namespace render_profile_detail
 
 [[nodiscard]] inline RenderProfile active_render_profile() {
     auto* tree = godot::Object::cast_to<godot::SceneTree>(godot::Engine::get_singleton()->get_main_loop());
     const godot::Window* root = tree ? tree->get_root() : nullptr;
-    if (!root || render_profile_detail::settings_of(*root) != render_settings(RenderProfile::enhanced)) {
+    if (!root || render_profile_detail::profile_settings_of(*root) != render_settings(RenderProfile::enhanced)) {
         return RenderProfile::retail;
     }
     return output_mode() == OutputMode::linear ? RenderProfile::remastered : RenderProfile::enhanced;
@@ -72,10 +82,15 @@ inline void apply_render_profile(godot::Viewport& viewport, const RenderProfile 
 
 // Draws the 3D scene at `scale` times the window resolution and filters it
 // to the window. Bilinear needs no motion vectors, so every shader adapter
-// keeps working; the 2D interface stays at the window resolution.
+// keeps working; the 2D interface stays at the window resolution. From 1.5
+// the supersampling smooths edges itself and MSAA is turned off (after the
+// profile applied it): at 2x, 4x MSAA multiplied the cost of every overlapping
+// explosion layer for little visible gain (melee benchmark, RTX 4070 Ti at
+// 2560x1440, zoomed in: GPU p99 14.2 ms with MSAA, 5.5 ms without).
 inline void apply_render_scale(godot::Viewport& viewport, const float scale) {
     viewport.set_scaling_3d_mode(godot::Viewport::SCALING_3D_MODE_BILINEAR);
     viewport.set_scaling_3d_scale(scale);
+    if (msaa_replaced_by_supersampling(scale)) viewport.set_msaa_3d(godot::Viewport::MSAA_DISABLED);
 }
 
 // The root viewport's settings as a report object: the profile they match
@@ -85,10 +100,11 @@ inline void apply_render_scale(godot::Viewport& viewport, const float scale) {
     godot::Window* root = tree ? tree->get_root() : nullptr;
     if (!root) return "null";
     const RenderSettings settings = render_profile_detail::settings_of(*root);
+    const RenderSettings requested = render_profile_detail::profile_settings_of(*root);
     const bool fxaa = root->get_screen_space_aa() == godot::Viewport::SCREEN_SPACE_AA_FXAA;
     const std::string_view name = fxaa ? "custom"
-        : settings == render_settings(RenderProfile::retail) ? "retail"
-        : settings == render_settings(RenderProfile::enhanced)
+        : requested == render_settings(RenderProfile::retail) ? "retail"
+        : requested == render_settings(RenderProfile::enhanced)
             ? (output_mode() == OutputMode::linear ? "remastered" : "enhanced") : "custom";
     return "{\"name\": \"" + std::string(name) + "\", \"msaa_samples\": " + std::to_string(settings.msaa_samples)
         + ", \"screen_space_aa\": \"" + (settings.smaa ? "smaa" : fxaa ? "fxaa" : "disabled")
