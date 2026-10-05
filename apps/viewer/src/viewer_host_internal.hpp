@@ -102,6 +102,9 @@ struct ViewerHost::Options final {
     // --eawr-render-profile retail|enhanced; empty picks default_render_profile().
     std::string render_profile;
     bool render_profile_missing{};
+    // --eawr-render-scale: 3D resolution relative to the window (enhanced profile only).
+    std::string render_scale;
+    bool render_scale_missing{};
     ViewerPath scene_path{std::string{"res://common/scene.json"}};
     ViewerPath replay_path{std::string{"res://common/original-v1.eawr-replay"}};
     std::string model_path{default_model_path};
