@@ -1,4 +1,5 @@
 #include "renderer_internal.hpp"
+#include "remastered_hull.hpp"
 
 namespace eawr::presentation::godot_backend {
 namespace {
@@ -732,7 +733,14 @@ struct UniformDeclaration final {
         // cannot silently inherit MeshGloss or the RSKIN adapter.
         if (!selected) return MaterialUpload::failed;
         shader_source = *selected;
-        if (lighting_ && lighting_->shadows && legacy::receives_shadows(source)) {
+        // The remastered hull (remastered_hull.hpp) is lit by Godot, so it
+        // receives the sun's shadow without the stored-value floor variant.
+        const std::string_view remastered = stored_output::linear()
+            ? remastered_hull::shader_source(source) : std::string_view{};
+        if (!remastered.empty()) {
+            shader_source = remastered;
+            target.shadow_receiving = lighting_ && lighting_->shadows;
+        } else if (lighting_ && lighting_->shadows && legacy::receives_shadows(source)) {
             if (auto variant = shadow_receiving_variant(*selected)) {
                 receiving_source = std::move(*variant);
                 shader_source = receiving_source;
