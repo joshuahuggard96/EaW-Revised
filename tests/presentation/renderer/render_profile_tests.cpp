@@ -9,6 +9,7 @@ namespace {
 
 using eawr::presentation::godot_backend::default_render_profile;
 using eawr::presentation::godot_backend::parse_render_profile;
+using eawr::presentation::godot_backend::parse_render_scale;
 using eawr::presentation::godot_backend::render_profile_name;
 using eawr::presentation::godot_backend::render_settings;
 using eawr::presentation::godot_backend::RenderProfile;
@@ -36,6 +37,15 @@ void names_round_trip() {
     }
     for (const std::string_view bad : {"", "Retail", "ENHANCED", "off", "retail "}) {
         check(!parse_render_profile(bad), "only the exact lower-case names parse");
+    }
+}
+
+void render_scales_parse_within_bounds() {
+    check(parse_render_scale("1") == 1.0F, "1 is the window resolution");
+    check(parse_render_scale("1.5") == 1.5F, "a fractional scale parses");
+    check(parse_render_scale("0.5") == 0.5F && parse_render_scale("2") == 2.0F, "both bounds are accepted");
+    for (const std::string_view bad : {"", "0.49", "2.01", "-1", "x", "1.5x", " 1", "nan", "inf"}) {
+        check(!parse_render_scale(bad), "only a plain number from 0.5 to 2 parses");
     }
 }
 
@@ -94,6 +104,7 @@ void only_a_players_live_view_is_enhanced() {
 int main() {
     settings_follow_the_owner_decision();
     names_round_trip();
+    render_scales_parse_within_bounds();
     shadow_budgets_are_bounded_and_ordered();
     only_a_players_live_view_is_enhanced();
     if (failures != 0) return EXIT_FAILURE;

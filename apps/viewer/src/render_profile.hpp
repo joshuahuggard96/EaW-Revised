@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <array>
+#include <charconv>
 #include <optional>
 #include <string_view>
 
@@ -57,6 +58,17 @@ struct RenderSettings final {
     if (text == "retail") return RenderProfile::retail;
     if (text == "enhanced") return RenderProfile::enhanced;
     return std::nullopt;
+}
+
+// --eawr-render-scale: the 3D resolution as a multiple of the window's.
+// Above 1 supersamples, below 1 trades sharpness for speed on weak GPUs.
+[[nodiscard]] inline std::optional<float> parse_render_scale(const std::string_view text) noexcept {
+    float scale{};
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), scale);
+    if (error != std::errc{} || end != text.data() + text.size() || !(scale >= 0.5F && scale <= 2.0F)) {
+        return std::nullopt;
+    }
+    return scale;
 }
 
 // The run facts that pick the default profile.
