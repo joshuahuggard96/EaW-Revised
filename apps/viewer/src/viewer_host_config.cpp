@@ -59,6 +59,12 @@ void ViewerHost::read_host_options(const PackedStringArray& arguments) {
             options_->render_profile = utf8(arguments[++index]);
         } else if (argument == "--eawr-settings-file") {
             if (!take_path(options_->settings_file)) break;
+        } else if (argument == "--eawr-render-scale") {
+            if (index + 1 >= arguments.size()) {
+                options_->render_scale_missing = true;
+                break;
+            }
+            options_->render_scale = utf8(arguments[++index]);
         } else if (argument == "--eawr-scene") {
             if (!take_input(options_->scene_path)) break;
         } else if (argument == "--eawr-replay") {
