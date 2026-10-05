@@ -20,6 +20,7 @@
 
 #include <godot_cpp/classes/global_constants.hpp>
 #include <godot_cpp/classes/image.hpp>
+#include <godot_cpp/variant/typed_array.hpp>
 #include <godot_cpp/classes/node3d.hpp>
 #include <godot_cpp/classes/rendering_server.hpp>
 #include <godot_cpp/classes/viewport.hpp>
@@ -59,6 +60,14 @@ using namespace godot;
 
 // Private declarations shared by the Godot renderer implementation files.
 namespace eawr::presentation::godot_backend {
+
+// The visual layer only backdrop instances add (GodotRenderer::set_backdrop),
+// so the reflection capture cameras see nothing else. The main camera keeps
+// every layer.
+inline constexpr std::uint32_t backdrop_layer = 1U << 19;
+// The captured backdrop cubemap's sampler, bound by the renderer once the
+// capture completes (GodotRenderer::update_backdrop), like the fog texture.
+inline constexpr std::string_view backdrop_parameter = "eawr_backdrop";
 
 [[nodiscard]] std::string utf8(const String& value);
 [[nodiscard]] Transform3D transform_from(const std::array<float, 16>& matrix);
@@ -188,6 +197,10 @@ public:
     [[nodiscard]] bool scene_bloom_active() const noexcept { return scene_bloom_active_; }
 
     void set_casts_shadows(const sim::AssetId asset_id, const bool casts);
+    void set_backdrop(sim::AssetId asset_id);
+    void capture_backdrop(const std::array<float, 3>& eye);
+    void update_backdrop();
+    [[nodiscard]] bool backdrop_ready() const noexcept { return backdrop_cubemap_.is_valid(); }
 
     // Live counts over registered resources: a failed upload is not counted
     // and a released resource is subtracted.
@@ -401,6 +414,19 @@ private:
     RID sun_light_;
     RID sun_instance_;
     std::set<sim::AssetId> non_casting_;
+    // Remastered reflections: the backdrop assets, a capture in flight (one
+    // offscreen viewport and camera per cubemap face) and the result.
+    struct BackdropCapture final {
+        std::array<RID, 6> viewports;
+        std::array<RID, 6> cameras;
+        RID environment;
+        RID compositor;
+        int frames{};
+    };
+    std::set<sim::AssetId> backdrop_assets_;
+    std::optional<BackdropCapture> backdrop_capture_;
+    RID backdrop_cubemap_;
+    float camera_far_{20000.0F};
     std::size_t shadow_receiving_{};
     std::size_t shadow_variant_failures_{};
     detail::ResourceLeaseLedger leases_;

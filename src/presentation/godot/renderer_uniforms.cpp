@@ -196,6 +196,7 @@ struct UniformDeclaration final {
     for (const ReflectedUniform& uniform : uniforms) {
         if (!is_sampler(uniform) || engine_supplied_sampler(tokens, uniform.name)) continue;
         if (uniform.name == GodotFogBackend::texture_parameter) continue;
+        if (uniform.name == backdrop_parameter) continue;
         if (legacy_route && uniform.name == "BaseTexture") continue;
         const bool bound = std::any_of(source.bindings.begin(), source.bindings.end(),
             [&uniform](const MaterialBinding& binding) {

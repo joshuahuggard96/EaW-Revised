@@ -78,6 +78,17 @@ void ViewerHost::_ready() try {
         return;
     }
     linear_exposure() = *exposure;
+    const std::optional<float> reflections = options_->reflections.empty()
+        ? std::optional<float>{default_backdrop_reflections} : parse_reflections(options_->reflections);
+    if (options_->reflections_missing || !reflections
+        || (!options_->reflections.empty() && render_profile != RenderProfile::remastered)) {
+        status_message_ = "--eawr-reflections expects a number from 0 to 4 and the remastered render profile";
+        UtilityFunctions::printerr(String(status_message_.c_str()));
+        static_cast<void>(write_report("failed"));
+        stop(2);
+        return;
+    }
+    backdrop_reflections() = *reflections;
     apply_render_profile(*get_viewport(), render_profile);
     apply_render_scale(*get_viewport(), *render_scale);
 

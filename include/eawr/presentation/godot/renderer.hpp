@@ -304,6 +304,18 @@ public:
     // asset ID, not to one upload: it survives release, so a release-then-
     // upload replacement keeps it until set_casts_shadows(asset_id, true).
     void set_casts_shadows(sim::AssetId asset_id, bool casts);
+    // Remastered reflections (output_mode.hpp, linear output only). Instances
+    // of a backdrop asset (sky, sun, planets, nebulae) also draw on the
+    // backdrop layer. capture_backdrop renders that layer around `eye`
+    // (render space) into a cubemap over the next frames; update_backdrop,
+    // called once per frame, finishes it and binds it to every material as
+    // eawr_backdrop with eawr_backdrop_strength backdrop_reflections()
+    // (output_mode.hpp). Without a linear frame
+    // both are no-ops.
+    void set_backdrop(sim::AssetId asset_id);
+    void capture_backdrop(const std::array<float, 3>& eye);
+    void update_backdrop();
+    [[nodiscard]] bool backdrop_ready() const noexcept;
     // Registered legacy materials compiled in the shadow-receiving variant,
     // and those whose adapter source had no `unshaded` render mode to
     // replace. Both are live counts: a failed upload is not counted and a
