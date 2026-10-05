@@ -53,9 +53,18 @@ namespace eawr::presentation::godot_backend {
     state.shadow_blur = 1.0F;
     state.shadow_bias = 0.05F;
     state.shadow_normal_bias = 5.0F;
-    // The enhanced profile's ultra filter softens with half the blur: space's
-    // wide cascades made blur 1 wash thin hull shadows out at tactical zoom.
-    if (quality.high_filter) state.shadow_blur = 0.5F;
+    // The enhanced profiles soften with less blur. Godot scales the depth
+    // bias by the blur, and both biases by the cascade's texel size, so a ship
+    // zoomed out to the third cascade lost most of its self-shadowing (M2
+    // frigate at zoom 0.9: 5.6% darkening against 16% close up). The 16k
+    // atlas (render_profile.hpp) halves the texels, and these biases keep 10%
+    // there without acne at the closest zoom; normal bias 0.2 or bias 0.005
+    // stippled the hull close up.
+    if (quality.high_filter) {
+        state.shadow_blur = 0.3F;
+        state.shadow_bias = 0.01F;
+        state.shadow_normal_bias = 0.5F;
+    }
     lighting::IrradianceMatrices matrices;
     lighting::IrradianceMatrices fill;
     lighting::Vec3 toward{};
