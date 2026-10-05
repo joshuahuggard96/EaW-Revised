@@ -21,6 +21,7 @@
 // multisample buffer: clamp each sample, average, then decode. Screen-space
 // AA (SMAA) runs after the tonemapper on stored values and needs nothing.
 
+#include "output_mode.hpp"
 #include "scene_bloom.hpp"
 #include "shader_adapter.hpp"
 
@@ -53,11 +54,22 @@ namespace eawr::presentation::godot_backend::stored_output {
     return rendering && rendering->get_rendering_device() != nullptr;
 }
 
+// Whether the frame holds linear light (output_mode.hpp): the remastered
+// profile on a RenderingDevice backend. The Compatibility fallback has no
+// compositor and always keeps the stored policy.
+[[nodiscard]] inline bool linear() {
+    return output_mode() == OutputMode::linear && active();
+}
+
 // Shader text as the running backend compiles it: stored-value sources as
-// written, or their Compatibility-fallback form.
+// written, their linear-output form, or their Compatibility-fallback form.
+// A source linear_output_source cannot parse compiles as written.
 [[nodiscard]] inline std::string backend_source(const std::string_view source) {
     std::string text(source);
-    return active() ? text : compatibility_source(std::move(text));
+    if (!active()) return compatibility_source(std::move(text));
+    if (!linear()) return text;
+    std::optional<std::string> converted = linear_output_source(text);
+    return converted ? std::move(*converted) : text;
 }
 
 namespace detail {
@@ -266,7 +278,8 @@ struct Compositor final {
 };
 
 // The compositor carrying the decode and the scene bloom, or empty RIDs when
-// the backend is not a RenderingDevice one.
+// the backend is not a RenderingDevice one. A linear frame needs no decode,
+// so its effect stays disabled and only the bloom runs.
 [[nodiscard]] inline Compositor create(godot::RenderingServer& rendering) {
     using namespace godot;
     if (!active()) return {};
@@ -275,7 +288,7 @@ struct Compositor final {
     rendering.compositor_effect_set_callback(result.effect,
         RenderingServer::COMPOSITOR_EFFECT_CALLBACK_TYPE_POST_TRANSPARENT, callable_mp_static(&detail::render));
     rendering.compositor_effect_set_flag(result.effect, RenderingServer::COMPOSITOR_EFFECT_FLAG_ACCESS_RESOLVED_COLOR, true);
-    rendering.compositor_effect_set_enabled(result.effect, true);
+    rendering.compositor_effect_set_enabled(result.effect, !linear());
     result.bloom = scene_bloom::create_effect(rendering);
     result.compositor = rendering.compositor_create();
     TypedArray<RID> effects;
