@@ -101,17 +101,20 @@ void fragment() {
     vec3 normal_dx = dFdx(NORMAL);
     vec3 normal_dy = dFdy(NORMAL);
     float variance = 0.25 * (dot(normal_dx, normal_dx) + dot(normal_dy, normal_dy));
-    float authored = mix(0.7, 0.35, normal_texel.a);
+    // The gloss mask scaled by the material's specular strength: asteroids
+    // author a near-white mask with Specular 0.08, hulls Specular 1.
+    float gloss = normal_texel.a * clamp(max(max(eawr_specular.r, eawr_specular.g), eawr_specular.b), 0.0, 1.0);
+    float authored = mix(0.7, 0.35, gloss);
     float alpha2 = clamp(authored * authored * authored * authored + min(2.0 * variance, 0.18), 0.0, 1.0);
     ROUGHNESS = sqrt(sqrt(alpha2));
     METALLIC = 0.0;
     // Carries the gloss mask to light() as SPECULAR_AMOUNT (0.16 x SPECULAR).
-    SPECULAR = normal_texel.a;
+    SPECULAR = gloss;
     // The backdrop mirrored in the hull: blurrier with roughness, stronger at
     // grazing angles (Schlick, damped by roughness), unshadowed by the sun.
     vec3 reflected = (INV_VIEW_MATRIX * vec4(reflect(-VIEW, NORMAL), 0.0)).xyz;
     float n_dot_v = clamp(dot(NORMAL, VIEW), 0.0, 1.0);
-    float reflectance = mix(0.04, 0.25, normal_texel.a);
+    float reflectance = mix(0.04, 0.25, gloss);
     float fresnel = reflectance
         + (max(1.0 - ROUGHNESS, reflectance) - reflectance) * pow(1.0 - n_dot_v, 5.0);
     EMISSION = textureLod(eawr_backdrop, reflected, ROUGHNESS * 7.0).rgb * fresnel * eawr_backdrop_strength;
