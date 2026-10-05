@@ -33,10 +33,10 @@ inline constexpr float default_linear_exposure = 1.25F;
 }
 
 // The remastered hulls' backdrop reflection strength (--eawr-reflections):
-// 1 is the physically based amount, 0 turns the reflections off. The default
-// is three times physical, the owner's pick: on dark backdrops such as M2
-// Coruscant the physical amount barely shows.
-inline constexpr float default_backdrop_reflections = 3.0F;
+// 1 is the physically based amount, 0 turns the reflections off. Off by
+// default, the owner's pick: 3 and 1.5 read as too much on hulls and
+// asteroids once HD textures were in.
+inline constexpr float default_backdrop_reflections = 0.0F;
 
 [[nodiscard]] inline float& backdrop_reflections() noexcept {
     static float strength = default_backdrop_reflections;
