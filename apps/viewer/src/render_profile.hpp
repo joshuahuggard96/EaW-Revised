@@ -92,6 +92,14 @@ struct RenderSettings final {
     return parse_bounded(text, 0.0F, 4.0F);
 }
 
+// A render scale from which supersampling replaces MSAA (apply_render_scale):
+// 1.5 already draws 2.25 samples per window pixel.
+inline constexpr float supersampling_replaces_msaa = 1.5F;
+
+[[nodiscard]] constexpr bool msaa_replaced_by_supersampling(const float scale) noexcept {
+    return scale >= supersampling_replaces_msaa;
+}
+
 // --eawr-glow: the remastered additive glows' brightness.
 [[nodiscard]] inline std::optional<float> parse_glow(const std::string_view text) noexcept {
     return parse_bounded(text, 0.5F, 8.0F);
