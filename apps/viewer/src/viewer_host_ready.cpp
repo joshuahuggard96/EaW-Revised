@@ -50,12 +50,24 @@ void ViewerHost::_ready() try {
     }
 
     // Retail for every capture and test, enhanced for a player's view (#184).
-    apply_render_profile(*get_viewport(), requested_render_profile.value_or(default_render_profile({
+    const RenderProfile render_profile = requested_render_profile.value_or(default_render_profile({
         .interactive = options_->camera_interactive,
         .self_test = options_->camera_input_selftest,
         .capture = !options_->capture_path.empty(),
         .resize_test = options_->window_resize_test.has_value(),
-    })));
+    }));
+    const std::optional<float> render_scale = options_->render_scale.empty()
+        ? std::optional<float>{1.0F} : parse_render_scale(options_->render_scale);
+    if (options_->render_scale_missing || !render_scale
+        || (*render_scale != 1.0F && render_profile != RenderProfile::enhanced)) {
+        status_message_ = "--eawr-render-scale expects a number from 0.5 to 2 and the enhanced render profile";
+        UtilityFunctions::printerr(String(status_message_.c_str()));
+        static_cast<void>(write_report("failed"));
+        stop(2);
+        return;
+    }
+    apply_render_profile(*get_viewport(), render_profile);
+    apply_render_scale(*get_viewport(), *render_scale);
 
     // The OS window still has the requested size (--resolution, else the
     // project's window size) here: a window manager's resize reaches Godot
