@@ -87,6 +87,11 @@ struct RenderSettings final {
     return parse_bounded(text, 0.5F, 2.0F);
 }
 
+// --eawr-reflections: the remastered hulls' backdrop reflection strength.
+[[nodiscard]] inline std::optional<float> parse_reflections(const std::string_view text) noexcept {
+    return parse_bounded(text, 0.0F, 4.0F);
+}
+
 // --eawr-exposure: the remastered frame's tonemapper exposure.
 [[nodiscard]] inline std::optional<float> parse_exposure(const std::string_view text) noexcept {
     return parse_bounded(text, 0.25F, 4.0F);

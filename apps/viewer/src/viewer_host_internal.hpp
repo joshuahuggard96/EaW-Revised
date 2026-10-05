@@ -94,6 +94,9 @@ struct ViewerHost::Options final {
     // --eawr-exposure: the remastered frame's tonemapper exposure.
     std::string exposure;
     bool exposure_missing{};
+    // --eawr-reflections: the remastered hulls' backdrop reflection strength.
+    std::string reflections;
+    bool reflections_missing{};
     ViewerPath scene_path{std::string{"res://common/scene.json"}};
     ViewerPath replay_path{std::string{"res://common/original-v1.eawr-replay"}};
     std::string model_path{default_model_path};

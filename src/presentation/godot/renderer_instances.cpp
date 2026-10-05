@@ -276,6 +276,9 @@ void GodotRenderer::Impl::submit(std::shared_ptr<const sim::RenderSnapshot> snap
                 rendering->instance_geometry_set_cast_shadows_setting(
                     rid, RenderingServer::SHADOW_CASTING_SETTING_OFF);
             }
+            if (backdrop_assets_.contains(source.asset_id)) {
+                rendering->instance_set_layer_mask(rid, 1U | backdrop_layer);
+            }
             instance = instances_.emplace(
                 source.entity_id, Instance{source.asset_id, rid, {}}).first;
             const auto pending = skin_poses_.find(source.entity_id);

@@ -50,6 +50,9 @@ uniform vec3 eawr_light_direction = vec3(0.0, 1.0, 0.0);
 uniform vec3 eawr_light_diffuse = vec3(2.0, 1.88, 1.72);
 uniform vec3 eawr_light_specular = vec3(2.0, 1.88, 1.72);
 uniform vec3 eawr_shadow_floor = vec3(0.5);
+// The backdrop cubemap (GodotRenderer::capture_backdrop); strength 0 until it exists.
+uniform samplerCube eawr_backdrop : source_color, filter_linear_mipmap;
+uniform float eawr_backdrop_strength = 0.0;
 varying vec3 eawr_fill;
 
 vec3 eawr_decode(vec3 stored_rgb) {
@@ -91,10 +94,27 @@ void fragment() {
     vec3 n = 2.0 * (normal_texel.rgb - 0.5);
     NORMAL = normalize(TANGENT * n.x + BINORMAL * n.y + NORMAL * n.z);
     ALBEDO = eawr_decode(surface);
-    ROUGHNESS = mix(0.7, 0.35, normal_texel.a);
+    // Specular anti-aliasing (Kaplanyan-Hoffman): where the normal map's
+    // detail is finer than a pixel, as when zoomed out, widen the GGX lobe
+    // by the normal's screen-space variance so panel lines do not shimmer or
+    // form moire grids in the highlights and reflections.
+    vec3 normal_dx = dFdx(NORMAL);
+    vec3 normal_dy = dFdy(NORMAL);
+    float variance = 0.25 * (dot(normal_dx, normal_dx) + dot(normal_dy, normal_dy));
+    float authored = mix(0.7, 0.35, normal_texel.a);
+    float alpha2 = clamp(authored * authored * authored * authored + min(2.0 * variance, 0.18), 0.0, 1.0);
+    ROUGHNESS = sqrt(sqrt(alpha2));
     METALLIC = 0.0;
     // Carries the gloss mask to light() as SPECULAR_AMOUNT (0.16 x SPECULAR).
     SPECULAR = normal_texel.a;
+    // The backdrop mirrored in the hull: blurrier with roughness, stronger at
+    // grazing angles (Schlick, damped by roughness), unshadowed by the sun.
+    vec3 reflected = (INV_VIEW_MATRIX * vec4(reflect(-VIEW, NORMAL), 0.0)).xyz;
+    float n_dot_v = clamp(dot(NORMAL, VIEW), 0.0, 1.0);
+    float reflectance = mix(0.04, 0.25, normal_texel.a);
+    float fresnel = reflectance
+        + (max(1.0 - ROUGHNESS, reflectance) - reflectance) * pow(1.0 - n_dot_v, 5.0);
+    EMISSION = textureLod(eawr_backdrop, reflected, ROUGHNESS * 7.0).rgb * fresnel * eawr_backdrop_strength;
 }
 
 void light() {

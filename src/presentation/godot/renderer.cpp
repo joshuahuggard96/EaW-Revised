@@ -29,6 +29,24 @@ void apply_linear_glow(
         bloom ? bloom->cutoff : 1.0F, 1.0F, 12.0F, 0.0F, RID());
 }
 
+// Cubemap face cameras in Godot's layer order (+X, -X, +Y, -Y, +Z, -Z): the
+// forward axis and the up that puts each face's t axis down the image. A
+// face also mirrors left to right (the cube is seen from inside), so each
+// image is flipped before upload.
+struct CubeFace final {
+    Vector3 forward;
+    Vector3 up;
+};
+constexpr std::array<CubeFace, 6> cube_faces{{
+    {Vector3(1, 0, 0), Vector3(0, 1, 0)},
+    {Vector3(-1, 0, 0), Vector3(0, 1, 0)},
+    {Vector3(0, 1, 0), Vector3(0, 0, -1)},
+    {Vector3(0, -1, 0), Vector3(0, 0, 1)},
+    {Vector3(0, 0, 1), Vector3(0, 1, 0)},
+    {Vector3(0, 0, -1), Vector3(0, 1, 0)},
+}};
+constexpr std::int32_t backdrop_face_size = 512;
+
 } // namespace
 
 
@@ -125,6 +143,13 @@ GodotRenderer::Impl::~Impl() {
     if (camera_.is_valid()) rendering->free_rid(camera_);
     if (environment_.is_valid()) rendering->free_rid(environment_);
     stored_output::release(*rendering, stored_compositor_);
+    if (backdrop_capture_) {
+        for (const RID& viewport : backdrop_capture_->viewports) rendering->free_rid(viewport);
+        for (const RID& camera : backdrop_capture_->cameras) rendering->free_rid(camera);
+        rendering->free_rid(backdrop_capture_->environment);
+        rendering->free_rid(backdrop_capture_->compositor);
+    }
+    if (backdrop_cubemap_.is_valid()) rendering->free_rid(backdrop_cubemap_);
     if (sun_instance_.is_valid()) rendering->free_rid(sun_instance_);
     if (sun_light_.is_valid()) rendering->free_rid(sun_light_);
 }
@@ -145,6 +170,10 @@ void GodotRenderer::Impl::apply_lighting_params(RenderingServer& rendering, cons
         Vector3(lighting_->specular[0], lighting_->specular[1], lighting_->specular[2]));
     rendering.material_set_param(material, StringName("eawr_shadow_floor"),
         Vector3(lighting_->shadow_floor[0], lighting_->shadow_floor[1], lighting_->shadow_floor[2]));
+    if (backdrop_cubemap_.is_valid()) {
+        rendering.material_set_param(material, StringName(backdrop_parameter.data()), backdrop_cubemap_);
+        rendering.material_set_param(material, StringName("eawr_backdrop_strength"), backdrop_reflections());
+    }
 }
 
 void GodotRenderer::Impl::apply_wind_params(
@@ -281,11 +310,85 @@ void GodotRenderer::Impl::set_casts_shadows(const sim::AssetId asset_id, const b
     else non_casting_.insert(asset_id);
 }
 
+void GodotRenderer::Impl::set_backdrop(const sim::AssetId asset_id) {
+    backdrop_assets_.insert(asset_id);
+    RenderingServer* rendering = RenderingServer::get_singleton();
+    if (!rendering) return;
+    for (const auto& [entity, instance] : instances_) {
+        static_cast<void>(entity);
+        if (instance.asset_id == asset_id) rendering->instance_set_layer_mask(instance.rid, 1U | backdrop_layer);
+    }
+}
+
+void GodotRenderer::Impl::capture_backdrop(const std::array<float, 3>& eye) {
+    RenderingServer* rendering = RenderingServer::get_singleton();
+    if (!rendering || !stored_output::linear() || backdrop_capture_ || !scenario_.is_valid()) return;
+    BackdropCapture capture;
+    // Linear light out, untonemapped: the 8-bit viewport stores it sRGB
+    // encoded and the hull's source_color sampler decodes it. An empty
+    // compositor keeps the scene bloom out of the faces.
+    capture.environment = rendering->environment_create();
+    rendering->environment_set_background(capture.environment, RenderingServer::ENV_BG_COLOR);
+    rendering->environment_set_bg_color(capture.environment, Color(0.006F, 0.008F, 0.015F, 1.0F));
+    rendering->environment_set_tonemap(capture.environment, RenderingServer::ENV_TONE_MAPPER_LINEAR, 1.0, 1.0);
+    capture.compositor = rendering->compositor_create();
+    const Vector3 origin(eye[0], eye[1], eye[2]);
+    for (std::size_t face = 0; face < cube_faces.size(); ++face) {
+        const RID camera = rendering->camera_create();
+        rendering->camera_set_perspective(camera, 90.0F, 1.0F, camera_far_);
+        Transform3D transform;
+        transform.origin = origin;
+        rendering->camera_set_transform(camera, transform.looking_at(origin + cube_faces[face].forward, cube_faces[face].up));
+        rendering->camera_set_cull_mask(camera, backdrop_layer);
+        rendering->camera_set_environment(camera, capture.environment);
+        rendering->camera_set_compositor(camera, capture.compositor);
+        const RID viewport = rendering->viewport_create();
+        rendering->viewport_set_size(viewport, backdrop_face_size, backdrop_face_size);
+        rendering->viewport_set_scenario(viewport, scenario_);
+        rendering->viewport_attach_camera(viewport, camera);
+        rendering->viewport_set_update_mode(viewport, RenderingServer::VIEWPORT_UPDATE_ONCE);
+        rendering->viewport_set_active(viewport, true);
+        capture.cameras[face] = camera;
+        capture.viewports[face] = viewport;
+    }
+    backdrop_capture_ = capture;
+}
+
+void GodotRenderer::Impl::update_backdrop() {
+    RenderingServer* rendering = RenderingServer::get_singleton();
+    if (!rendering || !backdrop_capture_) return;
+    // A ONCE viewport renders with the next frame; read it two frames later.
+    if (++backdrop_capture_->frames < 3) return;
+    TypedArray<Image> faces;
+    for (const RID& viewport : backdrop_capture_->viewports) {
+        Ref<Image> image = rendering->texture_2d_get(rendering->viewport_get_texture(viewport));
+        if (image.is_null() || image->is_empty()) break;
+        image->convert(Image::FORMAT_RGBA8);
+        image->flip_x();
+        image->generate_mipmaps();
+        faces.push_back(image);
+    }
+    for (const RID& viewport : backdrop_capture_->viewports) rendering->free_rid(viewport);
+    for (const RID& camera : backdrop_capture_->cameras) rendering->free_rid(camera);
+    rendering->free_rid(backdrop_capture_->environment);
+    rendering->free_rid(backdrop_capture_->compositor);
+    backdrop_capture_.reset();
+    if (faces.size() != static_cast<int64_t>(cube_faces.size())) return;
+    if (backdrop_cubemap_.is_valid()) rendering->free_rid(backdrop_cubemap_);
+    backdrop_cubemap_ = rendering->texture_2d_layered_create(faces, RenderingServer::TEXTURE_LAYERED_CUBEMAP);
+    if (!lighting_) return;
+    for (const auto& [asset, resource] : resources_) {
+        static_cast<void>(asset);
+        if (resource.material.is_valid()) apply_lighting_params(*rendering, resource.material);
+    }
+}
+
 void GodotRenderer::Impl::set_camera(const FixedCamera& camera) {
     RenderingServer* rendering = RenderingServer::get_singleton();
     if (!rendering || !camera_.is_valid()) return;
     rendering->camera_set_perspective(
         camera_, camera.vertical_fov_degrees, camera.near_plane, camera.far_plane);
+    camera_far_ = camera.far_plane;
     Transform3D camera_transform;
     camera_transform.origin = Vector3(camera.eye[0], camera.eye[1], camera.eye[2]);
     camera_transform = camera_transform.looking_at(
@@ -484,6 +587,11 @@ bool GodotRenderer::scene_bloom_active() const noexcept { return impl_->scene_bl
 void GodotRenderer::set_casts_shadows(const sim::AssetId asset_id, const bool casts) {
     impl_->set_casts_shadows(asset_id, casts);
 }
+
+void GodotRenderer::set_backdrop(const sim::AssetId asset_id) { impl_->set_backdrop(asset_id); }
+void GodotRenderer::capture_backdrop(const std::array<float, 3>& eye) { impl_->capture_backdrop(eye); }
+void GodotRenderer::update_backdrop() { impl_->update_backdrop(); }
+bool GodotRenderer::backdrop_ready() const noexcept { return impl_->backdrop_ready(); }
 
 std::size_t GodotRenderer::shadow_receiving_materials() const noexcept {
     return impl_->shadow_receiving_materials();
