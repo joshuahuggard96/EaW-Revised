@@ -40,7 +40,7 @@ namespace eawr::presentation::godot_backend {
     state.shadow_max_distance = max_distance;
     const auto quality = shadow_settings(active_render_profile(), true);
     state.shadow_atlas_size = quality.atlas_size;
-    state.shadow_filter = quality.high_filter ? GodotRenderer::ShadowFilter::soft_high
+    state.shadow_filter = quality.high_filter ? GodotRenderer::ShadowFilter::soft_ultra
                                             : GodotRenderer::ShadowFilter::soft_medium;
     // Four blended cascades keep the profile's near split depths while the
     // last cascade covers space's longer reach (#231). Godot scales the PCF
@@ -53,6 +53,9 @@ namespace eawr::presentation::godot_backend {
     state.shadow_blur = 1.0F;
     state.shadow_bias = 0.05F;
     state.shadow_normal_bias = 5.0F;
+    // The enhanced profile's ultra filter softens with half the blur: space's
+    // wide cascades made blur 1 wash thin hull shadows out at tactical zoom.
+    if (quality.high_filter) state.shadow_blur = 0.5F;
     lighting::IrradianceMatrices matrices;
     lighting::IrradianceMatrices fill;
     lighting::Vec3 toward{};
