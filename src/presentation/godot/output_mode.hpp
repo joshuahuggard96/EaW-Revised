@@ -52,4 +52,15 @@ inline constexpr float default_glow = 3.0F;
     return strength;
 }
 
+// The remastered hulls' studio-model look (--eawr-studio): 0 is the
+// remastered hull as is, 1 a clean neutral white-grey paint, a soft fill
+// light on the side away from the sun and ambient occlusion in the creases,
+// like a lit filming miniature. Off by default.
+inline constexpr float default_studio = 0.0F;
+
+[[nodiscard]] inline float& studio_strength() noexcept {
+    static float strength = default_studio;
+    return strength;
+}
+
 } // namespace eawr::presentation::godot_backend

@@ -105,6 +105,11 @@ inline constexpr float supersampling_replaces_msaa = 1.5F;
     return parse_bounded(text, 0.5F, 8.0F);
 }
 
+// --eawr-studio: the remastered hulls' studio-model look (0 off, 1 full).
+[[nodiscard]] inline std::optional<float> parse_studio(const std::string_view text) noexcept {
+    return parse_bounded(text, 0.0F, 1.0F);
+}
+
 // --eawr-exposure: the remastered frame's tonemapper exposure.
 [[nodiscard]] inline std::optional<float> parse_exposure(const std::string_view text) noexcept {
     return parse_bounded(text, 0.25F, 4.0F);

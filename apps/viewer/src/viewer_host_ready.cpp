@@ -98,6 +98,17 @@ void ViewerHost::_ready() {
         return;
     }
     glow_strength() = *glow;
+    const std::optional<float> studio = options_->studio.empty() ? std::optional<float>{default_studio}
+                                                                 : parse_studio(options_->studio);
+    if (options_->studio_missing || !studio
+        || (!options_->studio.empty() && render_profile != RenderProfile::remastered)) {
+        status_message_ = "--eawr-studio expects a number from 0 to 1 and the remastered render profile";
+        UtilityFunctions::printerr(String(status_message_.c_str()));
+        static_cast<void>(write_report("failed"));
+        stop(2);
+        return;
+    }
+    studio_strength() = *studio;
     apply_render_profile(*get_viewport(), render_profile);
     apply_render_scale(*get_viewport(), *render_scale);
 
