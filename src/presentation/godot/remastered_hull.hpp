@@ -1,6 +1,7 @@
 #pragma once
 
 #include "legacy/bump_colorize.hpp"
+#include "output_mode.hpp"
 #include "shader_adapter.hpp"
 
 #include <string>
@@ -22,6 +23,11 @@
 //   Godot's shadow attenuation. Its radiance is (2 x diffuse)^2.2, so a texel
 //   facing the sun keeps the stored-value brightness 2 x surface x diffuse;
 //   the specular colour takes the same power.
+// - The studio look (--eawr-studio, output_mode.hpp), on Imperial hulls only,
+//   blends towards a lit filming miniature: unmasked paint turns a clean, neutral white-grey (the
+//   texture's grain softened, its panel contrast kept but compressed), and a
+//   soft unshadowed fill wraps round from the side away from the sun so dark
+//   sides keep their detail. The renderer adds ambient occlusion with it.
 // - The environment's fill lights and ambient (SPH_LIGHT_FILL, per vertex) add
 //   to the sun's diffuse with the same power, so an unlit side keeps its
 //   retail brightness. As in retail, the shadow floor darkens them where the
@@ -53,6 +59,7 @@ uniform vec3 eawr_shadow_floor = vec3(0.5);
 // The backdrop cubemap (GodotRenderer::capture_backdrop); strength 0 until it exists.
 uniform samplerCube eawr_backdrop : source_color, filter_linear_mipmap;
 uniform float eawr_backdrop_strength = 0.0;
+const float eawr_studio = 0.0;
 varying vec3 eawr_fill;
 
 vec3 eawr_decode(vec3 stored_rgb) {
@@ -90,7 +97,21 @@ void fragment() {
     }
     vec4 base = texture(BaseTexture, UV);
     vec4 normal_texel = texture(NormalTexture, UV);
-    vec3 surface = mix(base.rgb, eawr_colorization * base.rgb, base.a);
+    vec3 paint = base.rgb;
+    if (eawr_studio > 0.0) {
+        // Half a mip level softer: the upscaled texture's grain goes, the
+        // panel lines (also in the normal map) stay.
+        vec3 soft = mix(paint, texture(BaseTexture, UV, 1.0).rgb, 0.5);
+        float value = dot(soft, vec3(0.299, 0.587, 0.114));
+        // A light grey primer: darker plates stay darker, but the range is
+        // compressed towards white and the blue-green cast is gone.
+        vec3 primer = vec3(0.97, 0.96, 0.94) * (0.62 + 0.38 * value);
+        paint = mix(paint, primer, eawr_studio);
+    }
+    vec3 team = eawr_colorization * base.rgb;
+    // The studio look keeps the team colour but mutes it to a tinted grey.
+    team = mix(team, vec3(dot(team, vec3(0.299, 0.587, 0.114))), 0.6 * eawr_studio);
+    vec3 surface = mix(paint, team, base.a);
     vec3 n = 2.0 * (normal_texel.rgb - 0.5);
     NORMAL = normalize(TANGENT * n.x + BINORMAL * n.y + NORMAL * n.z);
     ALBEDO = eawr_decode(surface);
@@ -127,7 +148,15 @@ void light() {
     // Retail darkens everything a shadow volume covers, fill included, by the
     // shadow floor (a stored-value scale, so its power 2.2 here).
     vec3 shadow = pow(mix(eawr_shadow_floor, vec3(1.0), ATTENUATION), vec3(2.2));
-    DIFFUSE_LIGHT += (sun * n_dot_l * ATTENUATION + eawr_fill) * shadow;
+    // The studio look's key light is brighter than the map's sun.
+    float key = 1.0 + 0.8 * eawr_studio;
+    DIFFUSE_LIGHT += (sun * key * n_dot_l * ATTENUATION + eawr_fill) * shadow;
+    if (eawr_studio > 0.0 && LIGHT_IS_DIRECTIONAL) {
+        // Studio fill: a broad soft light opposite the sun, as a bounce card
+        // would give, strongest on the far side and never shadowed.
+        float wrap = 0.5 - 0.5 * dot(NORMAL, LIGHT);
+        DIFFUSE_LIGHT += eawr_studio * 0.08 * (0.2 + 0.8 * wrap) * vec3(0.95, 0.97, 1.0);
+    }
     float gloss = SPECULAR_AMOUNT / 0.16;
     vec3 half_vector = normalize(VIEW + LIGHT);
     float n_dot_h = clamp(dot(NORMAL, half_vector), 0.0, 1.0);
@@ -147,6 +176,22 @@ void light() {
 }
 )GODOT";
 
+// An Imperial hull: its BaseTexture carries the Empire's art prefix, EV_
+// (ships) or EB_ (stations and buildings). Other factions, shared props and
+// the few non-Imperial models that borrow an Imperial texture (land treads)
+// make no difference in space.
+[[nodiscard]] inline bool imperial(const MaterialDescription& material) noexcept {
+    for (const MaterialBinding& binding : material.bindings) {
+        if (binding.name != "BaseTexture") continue;
+        const auto* texture = std::get_if<std::string>(&binding.value);
+        if (!texture || texture->size() < 3 || (*texture)[2] != '_') return false;
+        const char faction = static_cast<char>((*texture)[0] | 0x20);
+        const char kind = static_cast<char>((*texture)[1] | 0x20);
+        return faction == 'e' && (kind == 'v' || kind == 'b');
+    }
+    return false;
+}
+
 // The remastered source for a MeshBumpColorize or RSkinBumpColorize material,
 // or an empty view for every other program. Both programs share it: Godot
 // moves the authored frame through the skin before vertex() reads it.
@@ -157,7 +202,22 @@ void light() {
         || material.pass != RenderPass::opaque) {
         return {};
     }
-    return shader_head;
+    if (studio_strength() <= 0.0F || !imperial(material)) return shader_head;
+    // The studio variant reads its strength from a uniform, where every other
+    // hull has the constant 0. Godot applies ambient occlusion only to
+    // materials that take ambient light, so the variant also drops
+    // ambient_light_disabled; the ambient it lets in is the near-black
+    // background colour. Other hulls keep it and stay unoccluded.
+    static const std::string studio_source = [] {
+        std::string source{shader_head};
+        const auto replace = [&source](const std::string_view from, const std::string_view to) {
+            source.replace(source.find(from), from.size(), to);
+        };
+        replace(", ambient_light_disabled", "");
+        replace("const float eawr_studio = 0.0;", "uniform float eawr_studio = 0.0;");
+        return source;
+    }();
+    return studio_source;
 }
 
 } // namespace eawr::presentation::godot_backend::remastered_hull
