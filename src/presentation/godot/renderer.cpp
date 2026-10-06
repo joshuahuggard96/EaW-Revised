@@ -128,6 +128,17 @@ GodotRenderer::Impl::Impl(Node3D& owner, std::shared_ptr<GodotShaderCache> shade
     rendering->environment_set_tonemap(
         environment_, RenderingServer::ENV_TONE_MAPPER_LINEAR, 1.0, 1.0);
     if (stored_output::linear()) apply_linear_tonemap(*rendering, environment_);
+    // The studio look's contact shading (--eawr-studio): ambient occlusion
+    // darkens the creases between hull plates. The hulls take next to no
+    // ambient light, so it works through its share of the direct light.
+    // Godot fades it out from 50 to 300 units by default; space cameras sit
+    // 100 to 1900 units from their target, so the fade starts much further.
+    if (stored_output::linear() && studio_strength() > 0.0F) {
+        rendering->environment_set_ssao(environment_, true, 25.0F, 4.0F, 1.5F, 0.5F, 0.06F, 0.98F,
+            0.85F * studio_strength(), 1.0F);
+        rendering->environment_set_ssao_quality(
+            RenderingServer::ENV_SSAO_QUALITY_HIGH, false, 0.5F, 2, 4000.0F, 8000.0F);
+    }
     rendering->scenario_set_environment(scenario_, environment_);
     stored_compositor_ = stored_output::create(*rendering);
     if (stored_compositor_.compositor.is_valid()) {
@@ -185,6 +196,7 @@ void GodotRenderer::Impl::apply_lighting_params(RenderingServer& rendering, cons
     rendering.material_set_param(material, StringName("eawr_shadow_floor"),
         Vector3(lighting_->shadow_floor[0], lighting_->shadow_floor[1], lighting_->shadow_floor[2]));
     rendering.material_set_param(material, StringName("eawr_glow"), glow_strength());
+    rendering.material_set_param(material, StringName("eawr_studio"), studio_strength());
     if (backdrop_cubemap_.is_valid()) {
         rendering.material_set_param(material, StringName(backdrop_parameter.data()), backdrop_cubemap_);
         rendering.material_set_param(material, StringName("eawr_backdrop_strength"), backdrop_reflections());

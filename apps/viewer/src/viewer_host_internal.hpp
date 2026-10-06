@@ -114,6 +114,9 @@ struct ViewerHost::Options final {
     // --eawr-glow: the remastered additive glows' brightness.
     std::string glow;
     bool glow_missing{};
+    // --eawr-studio: the remastered hulls' studio-model look.
+    std::string studio;
+    bool studio_missing{};
     ViewerPath scene_path{std::string{"res://common/scene.json"}};
     ViewerPath replay_path{std::string{"res://common/original-v1.eawr-replay"}};
     std::string model_path{default_model_path};
