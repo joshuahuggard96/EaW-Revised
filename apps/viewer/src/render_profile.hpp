@@ -110,6 +110,11 @@ inline constexpr float supersampling_replaces_msaa = 1.5F;
     return parse_bounded(text, 0.0F, 1.0F);
 }
 
+// --eawr-explosions: the remastered explosions' light and glow (0 off, 1 default).
+[[nodiscard]] inline std::optional<float> parse_explosions(const std::string_view text) noexcept {
+    return parse_bounded(text, 0.0F, 4.0F);
+}
+
 // --eawr-exposure: the remastered frame's tonemapper exposure.
 [[nodiscard]] inline std::optional<float> parse_exposure(const std::string_view text) noexcept {
     return parse_bounded(text, 0.25F, 4.0F);
