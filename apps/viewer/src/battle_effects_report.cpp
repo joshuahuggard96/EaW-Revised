@@ -43,6 +43,7 @@ void BattleEffects::release() {
     }
     for (const LiveEffect& effect : effects_) static_cast<void>(registry_->release(effect.handle));
     effects_.clear();
+    if (lights_) lights_->release();
     energy_owner_effects_.clear();
     leech_effects_.clear();
     weaken_effects_.clear();
@@ -276,6 +277,9 @@ void BattleEffects::write_report(std::ostream& output) const {
         first_explosion = false;
     }
     output << "]";
+    if (lights_) {
+        output << ", \"explosion_lights\": {\"flashes\": " << lights_->flashes() << ", \"replaced\": " << lights_->replaced() << "}";
+    }
     output << ", \"particle_types\": {";
     bool first = true;
     for (const auto& [name, type] : particle_types_) {

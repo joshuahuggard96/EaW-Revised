@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "battle_effects_internal.hpp"
+#include "output_mode.hpp"
 
 namespace eawr::presentation::godot_backend {
 using namespace godot;
@@ -29,6 +30,10 @@ BattleEffects::BattleEffects(godot::Node3D& host, const vfs::Vfs& filesystem, co
     // #638: nothing here reads the streams' hashes, so the frames do not compute them.
     registry_->set_stream_hashes(false);
     backend_->set_emitter_reuse(true);
+    if (output_mode() == OutputMode::linear && explosion_strength() > 0.0F) {
+        lights_ = std::make_unique<ExplosionLights>(host);
+        backend_->set_additive_boost(explosion_strength());
+    }
 }
 
 BattleEffects::~BattleEffects() { release(); }
