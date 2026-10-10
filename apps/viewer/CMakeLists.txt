@@ -232,6 +232,7 @@ add_library(eawr_viewer SHARED
     src/battle_effects_prepare.cpp
     src/battle_effects_projectiles.cpp
     src/battle_effects_impacts.cpp
+    src/explosion_lights.cpp
     src/battle_effects_report.cpp
     src/unit_emitters.cpp
     src/unit_emitters_prepare.cpp

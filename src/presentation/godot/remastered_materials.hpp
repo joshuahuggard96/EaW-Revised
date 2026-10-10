@@ -84,24 +84,33 @@ vec3 eawr_backdrop_reflection(vec3 reflected_world, float n_dot_v, float roughne
 // 0.16 x SPECULAR for a dielectric).
 inline constexpr std::string_view common_light = R"GODOT(
 void light() {
-    float n_dot_l = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
-    // Retail darkens everything a shadow volume covers, fill included, by the
-    // shadow floor (a stored-value scale, so its power 2.2 here).
-    vec3 shadow = pow(mix(eawr_shadow_floor, vec3(1.0), ATTENUATION), vec3(2.2));
-    DIFFUSE_LIGHT += (eawr_sun_radiance() * n_dot_l * ATTENUATION + eawr_fill) * shadow;
-    float gloss = SPECULAR_AMOUNT / 0.16;
-    vec3 half_vector = normalize(VIEW + LIGHT);
-    float n_dot_h = clamp(dot(NORMAL, half_vector), 0.0, 1.0);
-    float n_dot_v = max(dot(NORMAL, VIEW), 1e-4);
-    float alpha = ROUGHNESS * ROUGHNESS;
-    float alpha2 = alpha * alpha;
-    float denominator = n_dot_h * n_dot_h * (alpha2 - 1.0) + 1.0;
-    float distribution = alpha2 / (PI * denominator * denominator);
-    float k = alpha * 0.5;
-    float visibility = 0.25 / ((n_dot_l * (1.0 - k) + k) * (n_dot_v * (1.0 - k) + k));
-    float reflectance = eawr_reflectance(gloss);
-    float fresnel = reflectance + (1.0 - reflectance) * pow(1.0 - clamp(dot(half_vector, VIEW), 0.0, 1.0), 5.0);
-    SPECULAR_LIGHT += eawr_specular_radiance() * fresnel * distribution * visibility * n_dot_l * ATTENUATION;
+    if (!LIGHT_IS_DIRECTIONAL) {
+        // Remastered explosion flashes (point lights): Lambert and a soft
+        // highlight on the gloss mask, without the sun's fill or shadow floor.
+        float point_n_dot_l = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+        float point_n_dot_h = clamp(dot(NORMAL, normalize(VIEW + LIGHT)), 0.0, 1.0);
+        DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION * point_n_dot_l;
+        SPECULAR_LIGHT += LIGHT_COLOR * ATTENUATION * point_n_dot_l * pow(point_n_dot_h, 24.0) * (SPECULAR_AMOUNT / 0.16) * 0.5;
+    } else {
+        float n_dot_l = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+        // Retail darkens everything a shadow volume covers, fill included, by the
+        // shadow floor (a stored-value scale, so its power 2.2 here).
+        vec3 shadow = pow(mix(eawr_shadow_floor, vec3(1.0), ATTENUATION), vec3(2.2));
+        DIFFUSE_LIGHT += (eawr_sun_radiance() * n_dot_l * ATTENUATION + eawr_fill) * shadow;
+        float gloss = SPECULAR_AMOUNT / 0.16;
+        vec3 half_vector = normalize(VIEW + LIGHT);
+        float n_dot_h = clamp(dot(NORMAL, half_vector), 0.0, 1.0);
+        float n_dot_v = max(dot(NORMAL, VIEW), 1e-4);
+        float alpha = ROUGHNESS * ROUGHNESS;
+        float alpha2 = alpha * alpha;
+        float denominator = n_dot_h * n_dot_h * (alpha2 - 1.0) + 1.0;
+        float distribution = alpha2 / (PI * denominator * denominator);
+        float k = alpha * 0.5;
+        float visibility = 0.25 / ((n_dot_l * (1.0 - k) + k) * (n_dot_v * (1.0 - k) + k));
+        float reflectance = eawr_reflectance(gloss);
+        float fresnel = reflectance + (1.0 - reflectance) * pow(1.0 - clamp(dot(half_vector, VIEW), 0.0, 1.0), 5.0);
+        SPECULAR_LIGHT += eawr_specular_radiance() * fresnel * distribution * visibility * n_dot_l * ATTENUATION;
+    }
 }
 )GODOT";
 

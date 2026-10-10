@@ -117,6 +117,9 @@ struct ViewerHost::Options final {
     // --eawr-studio: the remastered hulls' studio-model look.
     std::string studio;
     bool studio_missing{};
+    // --eawr-explosions: the remastered explosions' light and glow.
+    std::string explosions;
+    bool explosions_missing{};
     ViewerPath scene_path{std::string{"res://common/scene.json"}};
     ViewerPath replay_path{std::string{"res://common/original-v1.eawr-replay"}};
     std::string model_path{default_model_path};

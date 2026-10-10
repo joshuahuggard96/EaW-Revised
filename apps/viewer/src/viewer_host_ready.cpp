@@ -110,6 +110,17 @@ void ViewerHost::_ready() try {
         return;
     }
     studio_strength() = *studio;
+    const std::optional<float> explosions = options_->explosions.empty()
+        ? std::optional<float>{default_explosions} : parse_explosions(options_->explosions);
+    if (options_->explosions_missing || !explosions
+        || (!options_->explosions.empty() && render_profile != RenderProfile::remastered)) {
+        status_message_ = "--eawr-explosions expects a number from 0 to 4 and the remastered render profile";
+        UtilityFunctions::printerr(String(status_message_.c_str()));
+        static_cast<void>(write_report("failed"));
+        stop(2);
+        return;
+    }
+    explosion_strength() = *explosions;
     apply_render_profile(*get_viewport(), render_profile);
     apply_render_scale(*get_viewport(), *render_scale);
 

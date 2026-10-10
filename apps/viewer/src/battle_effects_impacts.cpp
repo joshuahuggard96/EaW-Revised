@@ -16,6 +16,7 @@
 #include <utility>
 
 #include "battle_effects_internal.hpp"
+#include "output_mode.hpp"
 
 namespace eawr::presentation::godot_backend {
 using namespace godot;
@@ -74,6 +75,76 @@ const std::string* BattleEffects::hit_pick(const std::vector<std::string>& list,
     }
     ++(projectile ? hit_picks_by_projectile_ : hit_picks_by_event_);
     return &list[space::hit_particle_pick(projectile.value_or(space::hit_event_key(event)), kind, list.size())];
+}
+
+std::array<float, 3> BattleEffects::flash_colour(const std::string& particle) {
+    if (const auto found = flash_colours_.find(particle); found != flash_colours_.end()) return found->second;
+    std::array<double, 3> sum{};
+    const ParticleType* type = particle_type(particle);
+    if (type != nullptr && type->system) {
+        for (std::size_t index = 0; index < type->system->emitters.size(); ++index) {
+            const particles::EmitterDefinition& emitter = type->system->emitters[index];
+            const particles::EmitterRenderPlan plan = particles::plan_emitter(emitter, index);
+            if (!plan.drawable || plan.blend != particles::Blend::additive) continue;
+            const auto start = [](const particles::ScalarTrack& track) {
+                return track.keys.empty() ? 1.0 : static_cast<double>(std::clamp(track.keys.front().value, 0.0F, 1.0F));
+            };
+            std::array<double, 3> colour{start(emitter.red), start(emitter.green), start(emitter.blue)};
+            // The texture's mean colour; a block-compressed one counts as white.
+            const assets::Texture* texture = resolve_texture(plan.texture);
+            if (texture != nullptr && !texture->mips.empty()) {
+                const assets::MipLevel& mip = texture->mips.front();
+                const auto format = texture->format;
+                const std::size_t pixel = format == assets::PixelFormat::rgba8 || format == assets::PixelFormat::bgra8 ? 4U
+                    : format == assets::PixelFormat::bgr8 ? 3U : format == assets::PixelFormat::l8 ? 1U : 0U;
+                if (pixel != 0U && mip.row_pitch >= mip.width * pixel && mip.bytes.size() >= std::size_t{mip.row_pitch} * mip.height) {
+                    std::array<double, 3> mean{};
+                    std::size_t count = 0;
+                    const std::uint32_t step = std::max(1U, std::max(mip.width, mip.height) / 64U);
+                    for (std::uint32_t y = 0; y < mip.height; y += step) {
+                        for (std::uint32_t x = 0; x < mip.width; x += step) {
+                            const auto* texel = mip.bytes.data() + std::size_t{y} * mip.row_pitch + std::size_t{x} * pixel;
+                            const auto byte = [&](const std::size_t at) { return static_cast<double>(std::to_integer<std::uint8_t>(texel[at])) / 255.0; };
+                            const bool bgr = format != assets::PixelFormat::rgba8;
+                            const double r = pixel == 1U ? byte(0) : byte(bgr ? 2 : 0);
+                            const double g = pixel == 1U ? byte(0) : byte(1);
+                            const double b = pixel == 1U ? byte(0) : byte(bgr ? 0 : 2);
+                            mean[0] += r; mean[1] += g; mean[2] += b;
+                            ++count;
+                        }
+                    }
+                    for (std::size_t c = 0; c < 3; ++c) colour[c] *= mean[c] / static_cast<double>(std::max<std::size_t>(count, 1U));
+                }
+            }
+            for (std::size_t c = 0; c < 3; ++c) sum[c] += colour[c];
+        }
+    }
+    const double peak = std::max({sum[0], sum[1], sum[2]});
+    std::array<float, 3> result{1.0F, 0.8F, 0.6F};
+    if (peak > 1.0e-4) {
+        // Brightest channel 1, a third of the way to white: a hot core reads paler than its glow.
+        for (std::size_t c = 0; c < 3; ++c) result[c] = static_cast<float>(0.67 * sum[c] / peak + 0.33);
+    }
+    return flash_colours_.emplace(particle, result).first->second;
+}
+
+void BattleEffects::flash(const std::string& particle, const std::array<double, 3>& position, const double radius,
+                          const bool death) {
+    if (!lights_ || particle.empty()) return;
+    const float strength = explosion_strength();
+    ExplosionLights::Flash light;
+    light.position = position;
+    light.colour = flash_colour(particle);
+    if (death) {
+        light.range = static_cast<float>(std::clamp(radius * 2.5, 150.0, 3000.0));
+        light.energy = 3.0F * strength;
+        light.frames = std::clamp(20.0 + radius / 15.0, 24.0, 60.0);
+    } else {
+        light.range = static_cast<float>(std::clamp(radius * 0.6, 80.0, 700.0));
+        light.energy = 2.0F * strength;
+        light.frames = 18.0;
+    }
+    lights_->add(light, static_cast<double>(birth_));
 }
 
 bool BattleEffects::spawn(const std::string& particle, const std::array<double, 3>& position,
@@ -508,26 +579,29 @@ bool BattleEffects::frame(const std::span<const platform::LiveTickEvents> reache
                    });
             if (spins) {
                 if (!spawn(type->second.spin_explosion, unit.position, basis, "spin_away", record.tick)) return false;
+                flash(type->second.spin_explosion, unit.position, type->second.radius, false);
                 continue;
             }
             if (event.kind == tactical::EventKind::unit_destroyed || event.kind == tactical::EventKind::spin_away_ended) {
                 if (!spawn(type->second.death_explosion, unit.position, basis, "death", record.tick)) return false;
+                flash(type->second.death_explosion, unit.position, type->second.radius, true);
                 last_seen_.erase(seen);
                 continue;
             }
             if (event.hardpoint >= type->second.hardpoint_explosions.size()) continue;
             const V local = vec(type->second.hardpoint_points[event.hardpoint]);
             const V world = add(add(scale(basis.x, local.x), scale(basis.y, local.y)), scale(basis.z, local.z));
-            if (!spawn(type->second.hardpoint_explosions[event.hardpoint],
-                       {unit.position[0] + world.x, unit.position[1] + world.y, unit.position[2] + world.z}, basis,
-                       "hardpoint", record.tick)) {
+            const std::array<double, 3> at{unit.position[0] + world.x, unit.position[1] + world.y, unit.position[2] + world.z};
+            if (!spawn(type->second.hardpoint_explosions[event.hardpoint], at, basis, "hardpoint", record.tick)) {
                 return false;
             }
+            flash(type->second.hardpoint_explosions[event.hardpoint], at, type->second.radius, false);
         }
     }
     if (!draw_projectiles(previous, latest, alpha, units, depth_camera)) return false;
     if (!follow_contacts(latest)) return false;
     if (!advance_until(due)) return false;
+    if (lights_) lights_->update(presented_tick - *clock_start_);
     batch_handles_.clear();
     for (const LiveEffect& effect : effects_) {
         if (effect.contact && !effect.detached) batch_handles_.push_back(effect.handle);

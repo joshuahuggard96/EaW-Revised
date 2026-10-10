@@ -1,5 +1,6 @@
 #include "particle_adapter.hpp"
 #include "particle_texture.hpp"
+#include "output_mode.hpp"
 #include "stored_output.hpp"
 #include "particle_upload.hpp"
 #include "particle_culling.hpp"
@@ -285,6 +286,7 @@ public:
         std::uint32_t index_stride{};
     };
 
+    float additive_boost_{};
     Impl(Node3D& host, TextureResolver resolver, GodotParticleBackend::FogCallbacks fog)
         : resolver_(std::move(resolver)), fog_(std::move(fog)) {
         if (host.get_world_3d().is_valid()) scenario_ = host.get_world_3d()->get_scenario();
@@ -315,8 +317,17 @@ public:
                 + ": fog-stub-v1 does not support heat/screen distortion or disabled depth test";
             return 0;
         }
-        const MaterialDescription material = GodotParticleBackend::material_for(plan,
+        MaterialDescription material = GodotParticleBackend::material_for(plan,
             static_cast<bool>(fog_.register_material));
+        if (additive_boost_ > 0.0F && plan.blend == particles::Blend::additive && output_mode() == OutputMode::linear) {
+            constexpr std::string_view plain = "    ALBEDO = pixel.rgb;\n    ALPHA = 1.0;";
+            if (const std::size_t at = material.program.find(plain); at != std::string::npos) {
+                material.program.replace(at, plain.size(),
+                    "    float eawr_peak = max(max(pixel.r, pixel.g), pixel.b);\n"
+                    "    ALBEDO = pixel.rgb * (1.0 + " + std::to_string(0.8F * additive_boost_) + " * eawr_peak * eawr_peak);\n"
+                    "    ALPHA = 1.0;");
+            }
+        }
         if (const auto valid = validate_material(material); !valid) {
             failure_ = valid.error().message;
             return 0;
@@ -742,6 +753,8 @@ GodotParticleBackend::BumpLighting GodotParticleBackend::default_bump_lighting()
         .specular = lighting::hemisphere_directional,
         .fill = fill.rgb};
 }
+void GodotParticleBackend::set_additive_boost(const float boost) { impl_->additive_boost_ = boost; }
+
 void GodotParticleBackend::set_lighting(const BumpLighting& lighting) { impl_->set_lighting(lighting); }
 std::size_t GodotParticleBackend::live_rids() const noexcept { return impl_->live_rids(); }
 std::size_t GodotParticleBackend::live_emitters() const noexcept { return impl_->live_emitters(); }

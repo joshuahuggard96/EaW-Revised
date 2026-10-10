@@ -47,6 +47,7 @@ void BattleEffects::release() {
     released_ = true;
     for (const LiveEffect& effect : effects_) static_cast<void>(registry_->release(effect.handle));
     effects_.clear();
+    if (lights_) lights_->release();
     energy_owner_effects_.clear();
     weaken_effects_.clear();
     spawned_projectile_types_.clear();
@@ -189,6 +190,9 @@ void BattleEffects::write_report(std::ostream& output) const {
                << (row.first_age ? std::to_string(*row.first_age) : std::string("null")) << "]";
     }
     output << "], \"spawn_log_full\": " << (spawn_log_.size() >= spawn_log_limit ? "true" : "false");
+    if (lights_) {
+        output << ", \"explosion_lights\": {\"flashes\": " << lights_->flashes() << ", \"replaced\": " << lights_->replaced() << "}";
+    }
     output << ", \"particle_types\": {";
     bool first = true;
     for (const auto& [name, type] : particle_types_) {

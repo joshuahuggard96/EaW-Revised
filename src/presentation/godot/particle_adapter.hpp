@@ -72,6 +72,11 @@ public:
     [[nodiscard]] static BumpLighting default_bump_lighting() noexcept;
     // Applies to live and later emitters; repeating the current state is free.
     void set_lighting(const BumpLighting& lighting);
+    // Remastered only (linear output mode; ignored otherwise), not a retail look: additive
+    // emitters created after the call push their bright texels past white, so explosion and
+    // impact cores bloom. A stored colour c becomes c * (1 + 0.8 * boost * max(c)^2), so faint
+    // smoke edges barely change. Zero, the default, keeps the retail program.
+    void set_additive_boost(float boost);
 
     // The material each emitter was created with. Particle materials pass the
     // same versioned MaterialDescription gate as every other renderer consumer.
