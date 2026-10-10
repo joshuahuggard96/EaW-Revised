@@ -288,7 +288,7 @@ const LiveUnit* session_detail::Tick::redirect_unit(const EntityId target) const
     return found != tracked_->staged->end() ? &found->second : nullptr;
 }
 
-std::span<const EntityId> session_detail::Tick::redirect_recipients(const EntityId target) const {
+std::vector<EntityId> session_detail::Tick::redirect_recipients(const EntityId target) const {
     const auto* found = redirect_unit(target);
     const auto* profile = found ? impl_->combat.find(found->state.type_id) : nullptr;
     if (!profile || !profile->redirect_damage_to_teammates) return {};
@@ -297,8 +297,14 @@ std::span<const EntityId> session_detail::Tick::redirect_recipients(const Entity
     if (parent == parents.end()) return {};
     const auto& minds = craft_prep_->minds.value();
     const auto mind = minds.find(parent->second);
-    if (mind == minds.end() || mind->second.roster.size() <= 1) return {};
-    return mind->second.roster;
+    if (mind == minds.end()) return {};
+    // WHE-64 reads the parent's current members. The mind keeps its authored roster after
+    // escorts die, so filter it: a leader whose escorts are all gone takes ordinary damage.
+    std::vector<EntityId> members;
+    for (const auto id : mind->second.roster)
+        if (redirect_unit(id)) members.push_back(id);
+    if (members.size() <= 1) return {};
+    return members;
 }
 
 core::Result<void> session_detail::Tick::impacts() {

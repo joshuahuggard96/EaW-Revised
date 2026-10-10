@@ -1926,6 +1926,51 @@ void test_hero_environment_damage_routing() {
     }
 }
 
+void test_hero_lone_leader_takes_damage() {
+    // WHE-64: routing reads the parent's current members. Once every escort is destroyed, the
+    // leader is the only member and takes ordinary damage itself instead of losing every share.
+    constexpr tactical::TypeId escort = 23;
+    auto initial = setup();
+    initial.units = {{1, 99, 2, at(0, 0), math::identity_quat(), {}},
+        {10, xwing_squadron, 1, at(0, 0), math::identity_quat(), {}},
+        {11, xwing_type, 1, at(0, 0), math::identity_quat(), {}},
+        {12, escort, 1, at(-100, 0), math::identity_quat(), {}},
+        {13, escort, 1, at(100, 0), math::identity_quat(), {}}};
+    initial.squadrons = {{10, {11, 12, 13}}};
+    auto movement = hangar_motion(); movement.squadrons.spawners.clear();
+    auto wing = movement.squadrons.craft.front(); wing.type_id = escort;
+    movement.squadrons.craft.push_back(wing);
+    movement.squadrons.squadrons.front().members = {xwing_type, escort, escort};
+    movement.squadrons.squadrons.front().offsets = {at(0, 0), at(-100, 0), at(100, 0)};
+    movement.avoidance = tactical::AvoidanceRules{units(24), decimal("0.2"), units(100), decimal("0.8"), units(15),
+        decimal("0.66"), decimal("1.2"), decimal("0.25"), decimal("1.7"), decimal("0.5"), decimal("0.5"), 3500, 6, 90, 45, units(50)};
+    tactical::Footprint victim; victim.type_id = xwing_type; victim.asteroid_damage = true; victim.radius = units(3);
+    victim.layer = tactical::SpaceLayer::frigate;
+    tactical::Footprint field; field.type_id = 99; field.layer = tactical::SpaceLayer::static_object;
+    field.asteroid_field = true; field.obstacle = true; field.radius = units(20);
+    movement.footprints = {victim, field};
+    auto health = durability(); health.profiles = {{xwing_type, units(1000), {}, false, {}}, {escort, units(1000), {}, false, {}}};
+    health.damage->asteroid_damage = units(60); health.damage->asteroid_rate = units(1);
+    tactical::CombatProfile leader; leader.type_id = xwing_type; leader.redirect_damage_to_teammates = true;
+    tactical::CombatTable combat; combat.profiles = {leader};
+    auto created = tactical::TacticalSession::create(initial, {}, health, movement, std::nullopt, combat, {}, {});
+    expect(static_cast<bool>(created), "lone leader fixture creates");
+    if (!created) { std::cerr << created.error().message << '\n'; return; }
+    auto world = std::move(created).value();
+    for (const auto id : {12U, 13U})
+        expect(static_cast<bool>(world.submit(command(0, 1, id - 12, id, tactical::DamagePayload{units(2000), tactical::hull_target}))),
+            "escort destruction submits");
+    const eawr::platform::ThreadWorkerAdapter executor(1);
+    for (unsigned frame = 0; frame < 3; ++frame) {
+        auto step = world.step(executor);
+        expect(static_cast<bool>(step), "lone leader frame completes");
+        if (!step) { std::cerr << step.error().message << '\n'; return; }
+    }
+    expect(!world.durability_state(12) && !world.durability_state(13), "both escorts are destroyed");
+    const auto hull = world.durability_state(11);
+    expect(hull && hull->hull < units(1000), "WHE-64 a leader without escorts takes ordinary damage");
+}
+
 void test_hunt_destinations() {
     const std::optional<std::array<Fixed, 4>> area = std::array{units(-2000), units(-2000), units(2000), units(2000)};
     const std::vector<tactical::HuntEnemy> enemies = {{at(600, 700, 20), true, false}, {at(-700, -800, 30), false, true}};
@@ -2349,6 +2394,7 @@ int main() {
     test_projectile_defence_transaction();
     test_impact_shooter_bonus();
     test_hero_environment_damage_routing();
+    test_hero_lone_leader_takes_damage();
     test_hero_wingmen();
     test_spawned_hero_abilities();
     test_hero_beams();

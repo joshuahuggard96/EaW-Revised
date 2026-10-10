@@ -61,7 +61,7 @@ private:
     [[nodiscard]] static std::optional<math::Vec3> point_move(const CommandPayload& payload);
     [[nodiscard]] static EntityId approach_target_of(const CommandPayload& payload);
     [[nodiscard]] static std::int64_t midpoint(const std::int64_t low, const std::int64_t high) noexcept;
-    [[nodiscard]] std::span<const EntityId> redirect_recipients(EntityId target) const;
+    [[nodiscard]] std::vector<EntityId> redirect_recipients(EntityId target) const;
     [[nodiscard]] const LiveUnit* redirect_unit(EntityId target) const;
     template <typename Apply>
     core::Result<bool> redirect_damage(const EntityId target, const Hit& incoming, Apply&& apply) {
