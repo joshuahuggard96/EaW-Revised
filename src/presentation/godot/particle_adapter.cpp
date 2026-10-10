@@ -6,6 +6,7 @@
 #include "particle_spawn_trace.hpp"
 #include "gpu_memory_ledger.hpp"
 #include "texture_budget.hpp"
+#include "output_mode.hpp"
 #include "stored_output.hpp"
 #include <godot_cpp/classes/engine.hpp>
 #include "particle_upload.hpp"
@@ -342,6 +343,7 @@ public:
         Array arrays;
     };
 
+    float additive_boost_{};
     Impl(Node3D& host, TextureResolver resolver, GodotParticleBackend::FogCallbacks fog,
          const std::size_t warm_policy_limit, const std::uint64_t warm_texture_limit)
         : resolver_(std::move(resolver)), fog_(std::move(fog)),
@@ -405,8 +407,7 @@ public:
                 + ": fog-stub-v1 does not support heat/screen distortion or disabled depth test";
             return std::nullopt;
         }
-        const MaterialDescription material = GodotParticleBackend::material_for(plan,
-            static_cast<bool>(fog_.register_material));
+        MaterialDescription material = material_of(plan);
         if (const auto valid = validate_material(material); !valid) {
             failure_ = valid.error().message;
             return std::nullopt;
@@ -717,8 +718,25 @@ public:
         }
     }
 
+    // The emitter's material; remastered additive programs carry the boost. Creation and
+    // both prewarm paths share it, so a prewarmed program is the one the battle compiles.
+    [[nodiscard]] MaterialDescription material_of(const particles::EmitterRenderPlan& plan) const {
+        MaterialDescription material = GodotParticleBackend::material_for(plan,
+            static_cast<bool>(fog_.register_material));
+        if (additive_boost_ > 0.0F && plan.blend == particles::Blend::additive && output_mode() == OutputMode::linear) {
+            constexpr std::string_view plain = "    ALBEDO = pixel.rgb;\n    ALPHA = 1.0;";
+            if (const std::size_t at = material.program.find(plain); at != std::string::npos) {
+                material.program.replace(at, plain.size(),
+                    "    float eawr_peak = max(max(pixel.r, pixel.g), pixel.b);\n"
+                    "    ALBEDO = pixel.rgb * (1.0 + " + std::to_string(0.8F * additive_boost_) + " * eawr_peak * eawr_peak);\n"
+                    "    ALPHA = 1.0;");
+            }
+        }
+        return material;
+    }
+
     detail::ParticleWarmPolicy warm_policy(const particles::EmitterRenderPlan& plan) const {
-        const auto material=GodotParticleBackend::material_for(plan,static_cast<bool>(fog_.register_material));
+        const auto material=material_of(plan);
         return {plan.texture,
             plan.blend==particles::Blend::bump_alpha?plan.normal_texture:std::string{},material.program,
             render_pass_priority(material.pass)+static_cast<std::int32_t>(std::min<std::uint32_t>(plan.order_in_phase,7U))};
@@ -798,7 +816,7 @@ public:
         if (!plan.drawable) return refuse();
         if (static_cast<bool>(fog_.register_material) != static_cast<bool>(fog_.unregister_material)) return refuse();
         if (fog_.register_material && (plan.blend == particles::Blend::heat_distortion || !plan.depth_test)) return refuse();
-        const auto material = GodotParticleBackend::material_for(plan, static_cast<bool>(fog_.register_material));
+        const auto material = material_of(plan);
         if (!validate_material(material)) return refuse();
         // Program identity is independent of texture bindings and render priority.
         if (warm_program_budget_.contains(material.program)) {
@@ -1442,6 +1460,8 @@ GodotParticleBackend::BumpLighting GodotParticleBackend::default_bump_lighting()
         .specular = lighting::hemisphere_directional,
         .fill = fill.rgb};
 }
+void GodotParticleBackend::set_additive_boost(const float boost) { impl_->additive_boost_ = boost; }
+
 void GodotParticleBackend::set_lighting(const BumpLighting& lighting) { impl_->set_lighting(lighting); }
 std::size_t GodotParticleBackend::live_rids() const noexcept { return impl_->live_rids(); }
 std::size_t GodotParticleBackend::live_emitters() const noexcept { return impl_->live_emitters(); }

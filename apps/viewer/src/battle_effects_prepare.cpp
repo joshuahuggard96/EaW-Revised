@@ -371,6 +371,12 @@ void BattleEffects::prepare_unit_looks(const units::UnitTables& tables, const si
                 }
                 if (!looks.asteroid_hits.empty()) looks.asteroid_collision = space::make_shield_collision_mesh(
                     collision_triangles(*model.value(), looks.shield_mesh));
+                if (lights_) {
+                    const double radius = looks.collision.triangles.empty()
+                        ? space::make_shield_collision_mesh(collision_triangles(*model.value(), false)).radius
+                        : looks.collision.radius;
+                    looks.radius = radius * looks.scale;
+                }
             } else {
                 unresolved_.push_back("model " + type.model_path + ": " + core::format_diagnostic(model.error()));
             }

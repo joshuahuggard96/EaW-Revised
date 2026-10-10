@@ -142,37 +142,46 @@ void fragment() {
 }
 
 void light() {
-    float n_dot_l = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
-    vec3 sun = pow(2.0 * eawr_diffuse * eawr_light_diffuse * eawr_light_scale.rgb * eawr_unit_light_scale,
-        vec3(2.2));
-    // Retail darkens everything a shadow volume covers, fill included, by the
-    // shadow floor (a stored-value scale, so its power 2.2 here).
-    vec3 shadow = pow(mix(eawr_shadow_floor, vec3(1.0), ATTENUATION), vec3(2.2));
-    // The studio look's key light is brighter than the map's sun.
-    float key = 1.0 + 0.8 * eawr_studio;
-    DIFFUSE_LIGHT += (sun * key * n_dot_l * ATTENUATION + eawr_fill) * shadow;
-    if (eawr_studio > 0.0 && LIGHT_IS_DIRECTIONAL) {
-        // Studio fill: a broad soft light opposite the sun, as a bounce card
-        // would give, strongest on the far side and never shadowed.
-        float wrap = 0.5 - 0.5 * dot(NORMAL, LIGHT);
-        DIFFUSE_LIGHT += eawr_studio * 0.08 * (0.2 + 0.8 * wrap) * vec3(0.95, 0.97, 1.0);
+    if (!LIGHT_IS_DIRECTIONAL) {
+        // Remastered explosion flashes (point lights): Lambert and a soft
+        // highlight on the gloss mask, without the sun's fill or shadow floor.
+        float point_n_dot_l = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+        float point_n_dot_h = clamp(dot(NORMAL, normalize(VIEW + LIGHT)), 0.0, 1.0);
+        DIFFUSE_LIGHT += LIGHT_COLOR * ATTENUATION * point_n_dot_l;
+        SPECULAR_LIGHT += LIGHT_COLOR * ATTENUATION * point_n_dot_l * pow(point_n_dot_h, 24.0) * (SPECULAR_AMOUNT / 0.16) * 0.5;
+    } else {
+        float n_dot_l = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
+        vec3 sun = pow(2.0 * eawr_diffuse * eawr_light_diffuse * eawr_light_scale.rgb * eawr_unit_light_scale,
+            vec3(2.2));
+        // Retail darkens everything a shadow volume covers, fill included, by the
+        // shadow floor (a stored-value scale, so its power 2.2 here).
+        vec3 shadow = pow(mix(eawr_shadow_floor, vec3(1.0), ATTENUATION), vec3(2.2));
+        // The studio look's key light is brighter than the map's sun.
+        float key = 1.0 + 0.8 * eawr_studio;
+        DIFFUSE_LIGHT += (sun * key * n_dot_l * ATTENUATION + eawr_fill) * shadow;
+        if (eawr_studio > 0.0 && LIGHT_IS_DIRECTIONAL) {
+            // Studio fill: a broad soft light opposite the sun, as a bounce card
+            // would give, strongest on the far side and never shadowed.
+            float wrap = 0.5 - 0.5 * dot(NORMAL, LIGHT);
+            DIFFUSE_LIGHT += eawr_studio * 0.08 * (0.2 + 0.8 * wrap) * vec3(0.95, 0.97, 1.0);
+        }
+        float gloss = SPECULAR_AMOUNT / 0.16;
+        vec3 half_vector = normalize(VIEW + LIGHT);
+        float n_dot_h = clamp(dot(NORMAL, half_vector), 0.0, 1.0);
+        float n_dot_v = max(dot(NORMAL, VIEW), 1e-4);
+        float alpha = ROUGHNESS * ROUGHNESS;
+        float alpha2 = alpha * alpha;
+        float denominator = n_dot_h * n_dot_h * (alpha2 - 1.0) + 1.0;
+        float distribution = alpha2 / (PI * denominator * denominator);
+        float k = alpha * 0.5;
+        float visibility = 0.25 / ((n_dot_l * (1.0 - k) + k) * (n_dot_v * (1.0 - k) + k));
+        // Glossy panels reflect like clear-coated paint (F0 0.25), matte ones
+        // like plain dielectric (0.04).
+        float reflectance = mix(0.04, 0.25, gloss);
+        float fresnel = reflectance + (1.0 - reflectance) * pow(1.0 - clamp(dot(half_vector, VIEW), 0.0, 1.0), 5.0);
+        vec3 specular_light = pow(eawr_light_specular * eawr_specular, vec3(2.2));
+        SPECULAR_LIGHT += specular_light * fresnel * distribution * visibility * n_dot_l * ATTENUATION;
     }
-    float gloss = SPECULAR_AMOUNT / 0.16;
-    vec3 half_vector = normalize(VIEW + LIGHT);
-    float n_dot_h = clamp(dot(NORMAL, half_vector), 0.0, 1.0);
-    float n_dot_v = max(dot(NORMAL, VIEW), 1e-4);
-    float alpha = ROUGHNESS * ROUGHNESS;
-    float alpha2 = alpha * alpha;
-    float denominator = n_dot_h * n_dot_h * (alpha2 - 1.0) + 1.0;
-    float distribution = alpha2 / (PI * denominator * denominator);
-    float k = alpha * 0.5;
-    float visibility = 0.25 / ((n_dot_l * (1.0 - k) + k) * (n_dot_v * (1.0 - k) + k));
-    // Glossy panels reflect like clear-coated paint (F0 0.25), matte ones
-    // like plain dielectric (0.04).
-    float reflectance = mix(0.04, 0.25, gloss);
-    float fresnel = reflectance + (1.0 - reflectance) * pow(1.0 - clamp(dot(half_vector, VIEW), 0.0, 1.0), 5.0);
-    vec3 specular_light = pow(eawr_light_specular * eawr_specular, vec3(2.2));
-    SPECULAR_LIGHT += specular_light * fresnel * distribution * visibility * n_dot_l * ATTENUATION;
 }
 )GODOT";
 

@@ -91,6 +91,7 @@ set(EAWR_VIEWER_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/battle_effects_prepare.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/battle_effects_projectiles.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/battle_effects_impacts.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/explosion_lights.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/battle_effects_report.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/unit_emitters.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/unit_emitters_prepare.cpp"

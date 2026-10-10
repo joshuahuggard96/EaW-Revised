@@ -7,6 +7,7 @@
 #include "eawr/assets/assets.hpp"
 #include "eawr/data/xml.hpp"
 #include "eawr/platform/live_session.hpp"
+#include "explosion_lights.hpp"
 #include "particle_adapter.hpp"
 #include "space_populate.hpp"
 
@@ -278,6 +279,7 @@ private:
         std::vector<std::uint32_t> collision_bones;
         std::vector<std::uint32_t> hardpoint_contact_bones;
         double scale{1.0};
+        double radius{};  // model bounding radius times scale (remastered explosion lights)
     };
     struct ParticleType final {
         std::string model_path;   // logical ALO path, empty when unresolved
@@ -433,6 +435,14 @@ private:
     std::vector<RefusedEffect> refused_effects_;
     std::uint64_t eligible_effects_{};
     std::vector<TerminalSound> terminal_sounds_;
+    // Remastered: a light flash for an explosion of `particle` at `position`, sized by the
+    // exploding unit's radius; a whole-unit death is bigger and longer than a hardpoint.
+    void flash(const std::string& particle, const std::array<double, 3>& position, double radius, bool death);
+    // The light colour of an explosion particle: its additive emitters' start colour times
+    // their texture's mean, brightest channel 1; warm white when nothing decodes.
+    [[nodiscard]] std::array<float, 3> flash_colour(const std::string& particle);
+    std::unique_ptr<ExplosionLights> lights_;
+    std::map<std::string, std::array<float, 3>, std::less<>> flash_colours_;
     [[nodiscard]] bool follow_contacts(const sim::tactical::TacticalSnapshot& latest);
     [[nodiscard]] bool draw_projectiles(const sim::tactical::TacticalSnapshot& previous,
         const sim::tactical::TacticalSnapshot& latest, double alpha, const UnitLookup& units, const FixedCamera& camera);

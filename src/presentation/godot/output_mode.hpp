@@ -63,4 +63,14 @@ inline constexpr float default_studio = 0.0F;
     return strength;
 }
 
+// The remastered explosions (--eawr-explosions): each explosion briefly lights
+// the hulls around it, and battle particles (explosions, impacts) glow
+// brighter so their cores bloom. 1 is the default strength, 0 turns both off.
+inline constexpr float default_explosions = 1.0F;
+
+[[nodiscard]] inline float& explosion_strength() noexcept {
+    static float strength = default_explosions;
+    return strength;
+}
+
 } // namespace eawr::presentation::godot_backend
