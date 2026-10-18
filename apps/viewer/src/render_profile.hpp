@@ -92,6 +92,41 @@ struct RenderSettings final {
     return parse_bounded(text, 0.0F, 4.0F);
 }
 
+// --eawr-aa: how the enhanced and remastered profiles smooth edges (remastered
+// defaults to `fsr2` at render scales up to 1, viewer_host_ready.cpp). `profile`
+// keeps the profile's own MSAA and SMAA (MSAA off from render scale 1.5, see
+// apply_render_scale). The others turn MSAA off: `smaa` keeps SMAA alone, `taa`
+// uses Godot's temporal AA, `fsr2` AMD FSR 2 (temporal; upscales when the
+// render scale is below 1), `off` nothing but the render scale.
+enum class AntiAliasing : std::uint8_t { profile, smaa, taa, fsr2, off };
+
+[[nodiscard]] constexpr std::optional<AntiAliasing> parse_antialiasing(const std::string_view text) noexcept {
+    if (text == "profile" || text == "msaa") return AntiAliasing::profile;
+    if (text == "smaa") return AntiAliasing::smaa;
+    if (text == "taa") return AntiAliasing::taa;
+    if (text == "fsr2") return AntiAliasing::fsr2;
+    if (text == "off") return AntiAliasing::off;
+    return std::nullopt;
+}
+
+[[nodiscard]] constexpr std::string_view antialiasing_name(const AntiAliasing mode) noexcept {
+    switch (mode) {
+    case AntiAliasing::smaa: return "smaa";
+    case AntiAliasing::taa: return "taa";
+    case AntiAliasing::fsr2: return "fsr2";
+    case AntiAliasing::off: return "off";
+    case AntiAliasing::profile: break;
+    }
+    return "profile";
+}
+
+// The mode the host applied; profile detection (profile_settings_of) reads it,
+// since every mode but `profile` changes the viewport's MSAA and SMAA.
+[[nodiscard]] inline AntiAliasing& active_antialiasing() noexcept {
+    static AntiAliasing mode = AntiAliasing::profile;
+    return mode;
+}
+
 // A render scale from which supersampling replaces MSAA (apply_render_scale):
 // 1.5 already draws 2.25 samples per window pixel.
 inline constexpr float supersampling_replaces_msaa = 1.5F;

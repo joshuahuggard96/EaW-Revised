@@ -288,6 +288,24 @@ void ViewerHost::_ready() try {
     explosion_strength() = *explosions;
     apply_render_profile(*get_viewport(), render_profile);
     apply_render_scale(*get_viewport(), *render_scale);
+    // Remastered defaults to FSR 2 at render scales up to 1 (the owner's pick: native
+    // resolution with temporal anti-aliasing, about 2.5x cheaper than 2x supersampling);
+    // above 1 the supersampling smooths edges itself. Enhanced keeps its profile AA.
+    const AntiAliasing default_antialiasing = render_profile == RenderProfile::remastered && *render_scale <= 1.0F
+        ? AntiAliasing::fsr2 : AntiAliasing::profile;
+    const std::optional<AntiAliasing> antialiasing = options_->aa.empty()
+        ? std::optional<AntiAliasing>{default_antialiasing} : parse_antialiasing(options_->aa);
+    if (options_->aa_missing || !antialiasing
+        || (!options_->aa.empty() && render_profile == RenderProfile::retail)
+        || (*antialiasing == AntiAliasing::fsr2 && *render_scale > 1.0F)) {
+        status_message_ = "--eawr-aa expects profile, smaa, taa, fsr2 (render scale 1 or below) or off, "
+                          "and the enhanced or remastered render profile";
+        UtilityFunctions::printerr(String(status_message_.c_str()));
+        static_cast<void>(write_report("failed"));
+        stop(2);
+        return;
+    }
+    apply_antialiasing(*get_viewport(), *antialiasing);
 
     // The OS window still has the requested size (--resolution, else the
     // project's window size) here: a window manager's resize reaches Godot
