@@ -5,6 +5,8 @@
 #include "options_screen.hpp"
 #include <chrono>
 
+#include <godot_cpp/classes/label.hpp>
+
 namespace eawr::presentation::godot_backend {
 
 using namespace map_mode_detail;
@@ -15,6 +17,7 @@ using namespace map_mode_detail;
 // `--eawr-perf-overlay on|off` (map_mode_hud.cpp, #558): an error message, or empty with `requested`
 // set when the overlay starts shown. The F3 key shows it in any run either way.
 [[nodiscard]] std::string parse_perf_overlay_argument(const godot::PackedStringArray& arguments, bool& requested);
+[[nodiscard]] std::string parse_fps_argument(const godot::PackedStringArray& arguments, bool& requested);
 
 // `--eawr-hud tactical|off` and its options (map_mode_hud.cpp); an error message,
 // or empty with `hud` set when the HUD is drawn: when asked for, and by default in
@@ -206,6 +209,14 @@ struct MapMode::State final {
     std::optional<presentation::ui::NetPerfReport> net_report;
     void sync_net_perf(double delta);
     [[nodiscard]] std::string net_perf_json() const;
+    // A plain frame rate in the top-right corner (`--eawr-fps on`), for playing rather than
+    // profiling; the F3 overlay above is the full dev tool. Refreshed four times a second.
+    bool fps_requested{};
+    godot::Label* fps_label{};
+    double fps_seconds{};
+    std::uint32_t fps_frames{};
+    void build_fps_counter(godot::Node3D& host);
+    void sync_fps_counter(double delta);
     // Once per presented frame, before the view draws: hands the overlay the new tick costs.
     void sync_perf_overlay();
     // The report's "perf_overlay" line (always there: a run without the overlay reports it hidden).
