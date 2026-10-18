@@ -86,6 +86,12 @@ void ViewerHost::read_host_options(const PackedStringArray& arguments) {
                 break;
             }
             options_->studio = utf8(arguments[++index]);
+        } else if (argument == "--eawr-aa") {
+            if (index + 1 >= arguments.size()) {
+                options_->aa_missing = true;
+                break;
+            }
+            options_->aa = utf8(arguments[++index]);
         } else if (argument == "--eawr-explosions") {
             if (index + 1 >= arguments.size()) {
                 options_->explosions_missing = true;

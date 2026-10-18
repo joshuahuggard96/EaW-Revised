@@ -56,6 +56,12 @@ namespace render_profile_detail {
     if (settings.msaa_samples == 0 && msaa_replaced_by_supersampling(static_cast<float>(viewport.get_scaling_3d_scale()))) {
         settings.msaa_samples = render_settings(RenderProfile::enhanced).msaa_samples;
     }
+    // --eawr-aa replaced the profile's MSAA and SMAA (apply_antialiasing).
+    if (active_antialiasing() != AntiAliasing::profile) {
+        const RenderSettings enhanced = render_settings(RenderProfile::enhanced);
+        settings.msaa_samples = enhanced.msaa_samples;
+        settings.smaa = enhanced.smaa;
+    }
     return settings;
 }
 
@@ -93,6 +99,18 @@ inline void apply_render_scale(godot::Viewport& viewport, const float scale) {
     if (msaa_replaced_by_supersampling(scale)) viewport.set_msaa_3d(godot::Viewport::MSAA_DISABLED);
 }
 
+// --eawr-aa, after apply_render_scale (enhanced and remastered only). FSR 2
+// replaces the bilinear scaler; Godot runs it at render scales up to 1.
+inline void apply_antialiasing(godot::Viewport& viewport, const AntiAliasing mode) {
+    active_antialiasing() = mode;
+    if (mode == AntiAliasing::profile) return;
+    viewport.set_msaa_3d(godot::Viewport::MSAA_DISABLED);
+    viewport.set_screen_space_aa(
+        mode == AntiAliasing::smaa ? godot::Viewport::SCREEN_SPACE_AA_SMAA : godot::Viewport::SCREEN_SPACE_AA_DISABLED);
+    viewport.set_use_taa(mode == AntiAliasing::taa);
+    if (mode == AntiAliasing::fsr2) viewport.set_scaling_3d_mode(godot::Viewport::SCALING_3D_MODE_FSR2);
+}
+
 // The root viewport's settings as a report object: the profile they match
 // ("custom" for neither) and the values themselves.
 [[nodiscard]] inline std::string render_profile_report() {
@@ -108,7 +126,8 @@ inline void apply_render_scale(godot::Viewport& viewport, const float scale) {
             ? (output_mode() == OutputMode::linear ? "remastered" : "enhanced") : "custom";
     return "{\"name\": \"" + std::string(name) + "\", \"msaa_samples\": " + std::to_string(settings.msaa_samples)
         + ", \"screen_space_aa\": \"" + (settings.smaa ? "smaa" : fxaa ? "fxaa" : "disabled")
-        + "\", \"anisotropic_filtering\": " + std::to_string(settings.anisotropy) + '}';
+        + "\", \"anisotropic_filtering\": " + std::to_string(settings.anisotropy)
+        + ", \"antialiasing\": \"" + std::string(antialiasing_name(active_antialiasing())) + "\"}";
 }
 
 } // namespace eawr::presentation::godot_backend

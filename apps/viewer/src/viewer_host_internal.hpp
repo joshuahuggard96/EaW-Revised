@@ -117,6 +117,9 @@ struct ViewerHost::Options final {
     // --eawr-studio: the remastered hulls' studio-model look.
     std::string studio;
     bool studio_missing{};
+    // --eawr-aa: the enhanced and remastered anti-aliasing mode.
+    std::string aa;
+    bool aa_missing{};
     // --eawr-explosions: the remastered explosions' light and glow.
     std::string explosions;
     bool explosions_missing{};
