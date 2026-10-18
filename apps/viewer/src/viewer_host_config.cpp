@@ -92,6 +92,13 @@ void ViewerHost::read_host_options(const PackedStringArray& arguments) {
                 break;
             }
             options_->aa = utf8(arguments[++index]);
+        } else if (argument == "--eawr-lasers" || argument == "--eawr-engines") {
+            const bool lasers = argument == "--eawr-lasers";
+            if (index + 1 >= arguments.size()) {
+                (lasers ? options_->lasers_missing : options_->engines_missing) = true;
+                break;
+            }
+            (lasers ? options_->lasers : options_->engines) = utf8(arguments[++index]);
         } else if (argument == "--eawr-explosions") {
             if (index + 1 >= arguments.size()) {
                 options_->explosions_missing = true;

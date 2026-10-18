@@ -354,7 +354,9 @@ BattleEffects::Batch* BattleEffects::batch(const Render render) {
         plan.depth_write = false;
         plan.texture = render == Render::kite ? "p_particle_master.tga" : "W_Laser_Pill.tga";
         plan.drawable = true;
+        backend_->set_laser_core(laser_core());
         target.resource = backend_->create_emitter(plan);
+        backend_->set_laser_core(0.0F);
         if (target.resource == 0) {
             failure_ = "laser batch " + plan.texture + ": " + backend_->failure_cause();
             return nullptr;
@@ -574,7 +576,9 @@ bool BattleEffects::draw_projectiles(const tactical::TacticalSnapshot& previous,
                 plan.blend_selector = 1; plan.program = "Engine/PrimAdditive.fx"; plan.technique = "t1";
                 plan.blend = particles::Blend::additive; plan.phase = particles::DrawPhase::transparent;
                 plan.depth_test = true; plan.depth_write = false; plan.drawable = true; plan.texture = look.texture;
+                backend_->set_laser_core(laser_core());
                 look.batch.resource = backend_->create_emitter(plan);
+                backend_->set_laser_core(0.0F);
                 if (look.batch.resource == 0) { failure_ = "hero beam " + look.texture + ": " + backend_->failure_cause(); return false; }
             }
             const V a = vec(origin), b = vec(endpoint);

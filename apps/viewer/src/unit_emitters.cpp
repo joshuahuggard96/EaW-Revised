@@ -1,3 +1,4 @@
+#include "output_mode.hpp"
 #include "unit_emitters.hpp"
 
 #include "eawr/presentation/animation/animation.hpp"
@@ -28,6 +29,13 @@ UnitEmitters::UnitEmitters(godot::Node3D& host, const vfs::Vfs& filesystem)
       registry_(std::make_unique<particles::EffectRegistry>(*backend_)) {
     // #638: nothing here reads the streams' hashes, so the frames do not compute them.
     registry_->set_stream_hashes(false);
+    // Remastered: engine and thruster particles bloom (--eawr-engines).
+    // Their additive emitters also take the lasers' white-hot core, so a glow burns white
+    // at its centre inside the authored colour.
+    if (output_mode() == OutputMode::linear && engine_strength() > 0.0F) {
+        backend_->set_additive_boost(engine_strength());
+        backend_->set_laser_core(0.8F * engine_strength());
+    }
 }
 
 UnitEmitters::~UnitEmitters() { release(); }

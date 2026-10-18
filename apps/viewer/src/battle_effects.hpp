@@ -292,6 +292,8 @@ private:
     // their texture's mean, brightest channel 1; warm white when nothing decodes.
     [[nodiscard]] std::array<float, 3> flash_colour(const std::string& particle);
     std::unique_ptr<ExplosionLights> lights_;
+    // Remastered: the white-hot core strength of laser bolts and beams (--eawr-lasers); 0 retail.
+    [[nodiscard]] static float laser_core() noexcept;
     std::map<std::string, std::array<float, 3>, std::less<>> flash_colours_;
     [[nodiscard]] bool follow_contacts(const sim::tactical::TacticalSnapshot& latest);
     [[nodiscard]] bool draw_projectiles(const sim::tactical::TacticalSnapshot& previous,
