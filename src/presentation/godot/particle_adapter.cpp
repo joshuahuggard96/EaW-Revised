@@ -344,6 +344,7 @@ public:
     };
 
     float additive_boost_{};
+    float laser_core_{};
     Impl(Node3D& host, TextureResolver resolver, GodotParticleBackend::FogCallbacks fog,
          const std::size_t warm_policy_limit, const std::uint64_t warm_texture_limit)
         : resolver_(std::move(resolver)), fog_(std::move(fog)),
@@ -718,12 +719,26 @@ public:
         }
     }
 
-    // The emitter's material; remastered additive programs carry the boost. Creation and
+    // The emitter's material; remastered additive programs carry the boost and laser core. Creation and
     // both prewarm paths share it, so a prewarmed program is the one the battle compiles.
     [[nodiscard]] MaterialDescription material_of(const particles::EmitterRenderPlan& plan) const {
         MaterialDescription material = GodotParticleBackend::material_for(plan,
             static_cast<bool>(fog_.register_material));
-        if (additive_boost_ > 0.0F && plan.blend == particles::Blend::additive && output_mode() == OutputMode::linear) {
+        const bool linear_additive = plan.blend == particles::Blend::additive && output_mode() == OutputMode::linear;
+        if (laser_core_ > 0.0F && linear_additive) {
+            constexpr std::string_view plain = "    ALBEDO = pixel.rgb;\n    ALPHA = 1.0;";
+            if (const std::size_t at = material.program.find(plain); at != std::string::npos) {
+                const float glow = 0.8F * std::max(additive_boost_, 1.0F);
+                material.program.replace(at, plain.size(),
+                    "    vec3 eawr_texel = texture(eawr_particle_texture, UV).rgb;\n"
+                    "    float eawr_core = pow(max(max(eawr_texel.r, eawr_texel.g), eawr_texel.b), 3.0)\n"
+                    "        * max(max(COLOR.r, COLOR.g), COLOR.b);\n"
+                    "    float eawr_peak = max(max(pixel.r, pixel.g), pixel.b);\n"
+                    "    ALBEDO = pixel.rgb * (1.0 + " + std::to_string(glow) + " * eawr_peak * eawr_peak)\n"
+                    "        + vec3(" + std::to_string(laser_core_) + " * eawr_core);\n"
+                    "    ALPHA = 1.0;");
+            }
+        } else if (additive_boost_ > 0.0F && linear_additive) {
             constexpr std::string_view plain = "    ALBEDO = pixel.rgb;\n    ALPHA = 1.0;";
             if (const std::size_t at = material.program.find(plain); at != std::string::npos) {
                 material.program.replace(at, plain.size(),
@@ -1461,6 +1476,8 @@ GodotParticleBackend::BumpLighting GodotParticleBackend::default_bump_lighting()
         .fill = fill.rgb};
 }
 void GodotParticleBackend::set_additive_boost(const float boost) { impl_->additive_boost_ = boost; }
+
+void GodotParticleBackend::set_laser_core(const float core) { impl_->laser_core_ = core; }
 
 void GodotParticleBackend::set_lighting(const BumpLighting& lighting) { impl_->set_lighting(lighting); }
 std::size_t GodotParticleBackend::live_rids() const noexcept { return impl_->live_rids(); }

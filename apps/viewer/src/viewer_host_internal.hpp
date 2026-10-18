@@ -123,6 +123,11 @@ struct ViewerHost::Options final {
     // --eawr-aa: the enhanced and remastered anti-aliasing mode.
     std::string aa;
     bool aa_missing{};
+    // --eawr-lasers, --eawr-engines: the remastered laser cores and engine glow.
+    std::string lasers;
+    bool lasers_missing{};
+    std::string engines;
+    bool engines_missing{};
     // --eawr-explosions: the remastered explosions' light and glow.
     std::string explosions;
     bool explosions_missing{};

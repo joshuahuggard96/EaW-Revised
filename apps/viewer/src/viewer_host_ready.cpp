@@ -286,6 +286,22 @@ void ViewerHost::_ready() try {
         return;
     }
     explosion_strength() = *explosions;
+    for (const bool lasers : {true, false}) {
+        const std::string& text = lasers ? options_->lasers : options_->engines;
+        const bool missing = lasers ? options_->lasers_missing : options_->engines_missing;
+        // Same 0..4 range as --eawr-explosions.
+        const std::optional<float> value = text.empty()
+            ? std::optional<float>{lasers ? default_lasers : default_engines} : parse_explosions(text);
+        if (missing || !value || (!text.empty() && render_profile != RenderProfile::remastered)) {
+            status_message_ = std::string(lasers ? "--eawr-lasers" : "--eawr-engines")
+                + " expects a number from 0 to 4 and the remastered render profile";
+            UtilityFunctions::printerr(String(status_message_.c_str()));
+            static_cast<void>(write_report("failed"));
+            stop(2);
+            return;
+        }
+        (lasers ? laser_strength() : engine_strength()) = *value;
+    }
     apply_render_profile(*get_viewport(), render_profile);
     apply_render_scale(*get_viewport(), *render_scale);
     // Remastered defaults to FSR 2 at render scales up to 1 (the owner's pick: native

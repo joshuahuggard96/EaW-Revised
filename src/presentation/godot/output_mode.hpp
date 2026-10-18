@@ -73,4 +73,22 @@ inline constexpr float default_explosions = 1.0F;
     return strength;
 }
 
+// The remastered lasers (--eawr-lasers): bolts and beams get a white-hot core
+// inside their coloured glow. 0.5 is the default (the owner's pick), 0 the retail bolt.
+inline constexpr float default_lasers = 0.5F;
+
+[[nodiscard]] inline float& laser_strength() noexcept {
+    static float strength = default_lasers;
+    return strength;
+}
+
+// The remastered engine glows (--eawr-engines): engine and thruster particles
+// push their bright texels past white so they bloom. 1 is the default, 0 off.
+inline constexpr float default_engines = 1.0F;
+
+[[nodiscard]] inline float& engine_strength() noexcept {
+    static float strength = default_engines;
+    return strength;
+}
+
 } // namespace eawr::presentation::godot_backend
