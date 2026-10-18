@@ -38,6 +38,10 @@ BattleEffects::BattleEffects(godot::Node3D& host, const vfs::Vfs& filesystem, co
 
 BattleEffects::~BattleEffects() { release(); }
 
+float BattleEffects::laser_core() noexcept {
+    return output_mode() == OutputMode::linear ? 1.2F * laser_strength() : 0.0F;
+}
+
 void BattleEffects::move_feedback(const sim::math::Vec3& point, const ui::OrderMode mode,
                                   const bool double_click, const std::uint64_t tick) {
     if (released_) return;
