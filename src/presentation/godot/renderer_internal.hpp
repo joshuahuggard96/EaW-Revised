@@ -355,6 +355,12 @@ private:
 
     [[nodiscard]] bool upload_texture(
         RenderingServer& rendering, const assets::Texture& source, RID& target);
+    // A resource's texture through the shared cache: a texture read from a file (one logical
+    // path, source and layer, same size and format) is uploaded once and shared by every
+    // resource that binds it. Each submesh of a model is its own resource, so without sharing
+    // a 17-piece hull held 17 copies of its 4K textures. Release with release_texture.
+    [[nodiscard]] bool acquire_texture(RenderingServer& rendering, const assets::Texture& source, RID& target);
+    void release_texture(RenderingServer& rendering, const RID& texture);
 
     [[nodiscard]] static bool shader_compiled(
         RenderingServer& rendering, const RID& shader, const StringName& declared);
@@ -394,7 +400,7 @@ private:
         return value.substr(std::string_view("shared:").size());
     }
 
-    static void free_resource(RenderingServer& rendering, const Resource& resource);
+    void free_resource(RenderingServer& rendering, const Resource& resource);
 
     Node3D& owner_;
     std::shared_ptr<GodotShaderCache> shader_cache_;
@@ -408,6 +414,12 @@ private:
     std::unique_ptr<detail::UploadIdentityPool> upload_identity_pool_;
     std::map<sim::AssetId, Resource> resources_;
     std::map<std::string, RID> shared_textures_;
+    struct CachedTexture final {
+        RID texture;
+        std::size_t references{};
+    };
+    std::map<std::string, CachedTexture> texture_cache_;
+    std::map<std::uint64_t, std::string> texture_cache_keys_; // RID id -> its cache key
     std::optional<GodotRenderer::LightingState> lighting_;
     std::optional<GodotRenderer::WindState> wind_;
     bool scene_bloom_active_{};

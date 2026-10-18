@@ -94,6 +94,39 @@ namespace {
     return core::Result<void>::success();
 }
 
+[[nodiscard]] bool GodotRenderer::Impl::acquire_texture(
+    RenderingServer& rendering, const assets::Texture& source, RID& target) {
+    if (source.source.logical_path.empty()) return upload_texture(rendering, source, target);
+    std::size_t bytes{};
+    for (const assets::MipLevel& mip : source.mips) bytes += mip.bytes.size();
+    const std::string key = source.source.logical_path + '|' + source.source.source_id + '|' + source.source.layer_id
+        + '|' + std::to_string(source.width) + 'x' + std::to_string(source.height) + '|'
+        + std::to_string(static_cast<int>(source.format)) + '|' + std::to_string(source.mips.size()) + '|'
+        + std::to_string(bytes);
+    if (auto found = texture_cache_.find(key); found != texture_cache_.end()) {
+        ++found->second.references;
+        target = found->second.texture;
+        return true;
+    }
+    if (!upload_texture(rendering, source, target)) return false;
+    texture_cache_.emplace(key, CachedTexture{target, 1});
+    texture_cache_keys_.emplace(target.get_id(), key);
+    return true;
+}
+
+void GodotRenderer::Impl::release_texture(RenderingServer& rendering, const RID& texture) {
+    const auto key = texture_cache_keys_.find(texture.get_id());
+    if (key == texture_cache_keys_.end()) {
+        rendering.free_rid(texture);
+        return;
+    }
+    const auto entry = texture_cache_.find(key->second);
+    if (entry != texture_cache_.end() && --entry->second.references > 0) return;
+    if (entry != texture_cache_.end()) texture_cache_.erase(entry);
+    texture_cache_keys_.erase(key);
+    rendering.free_rid(texture);
+}
+
 [[nodiscard]] bool GodotRenderer::Impl::upload_texture(
     RenderingServer& rendering, const assets::Texture& source, RID& target) {
     core::load_profile::Scope upload_scope(core::load_profile::Phase::texture_upload);

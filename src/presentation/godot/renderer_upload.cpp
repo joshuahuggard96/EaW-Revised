@@ -73,11 +73,11 @@ namespace eawr::presentation::godot_backend {
     resource.identity = upload_identity_pool_->submit(
         detail::upload_identity_bytes(model, texture, description, named));
     MaterialRefusal refusal;
-    bool texture_uploaded = upload_texture(*rendering, texture, resource.texture);
+    bool texture_uploaded = acquire_texture(*rendering, texture, resource.texture);
     for (const GodotRenderer::BindingTexture& item : binding_textures) {
         if (!texture_uploaded) break;
         RID bound;
-        texture_uploaded = upload_texture(*rendering, item.texture, bound);
+        texture_uploaded = acquire_texture(*rendering, item.texture, bound);
         if (bound.is_valid()) resource.binding_textures.emplace_back(item.binding, bound);
     }
     const MaterialUpload material_uploaded = texture_uploaded
@@ -163,9 +163,9 @@ void GodotRenderer::Impl::free_resource(RenderingServer& rendering, const Resour
     if (resource.mesh.is_valid()) rendering.free_rid(resource.mesh);
     if (resource.material.is_valid()) rendering.free_rid(resource.material);
     if (resource.shader.is_valid() && !resource.shared_shader) rendering.free_rid(resource.shader);
-    if (resource.texture.is_valid()) rendering.free_rid(resource.texture);
+    if (resource.texture.is_valid()) release_texture(rendering, resource.texture);
     for (const auto& item : resource.binding_textures) {
-        if (item.second.is_valid()) rendering.free_rid(item.second);
+        if (item.second.is_valid()) release_texture(rendering, item.second);
     }
 }
 

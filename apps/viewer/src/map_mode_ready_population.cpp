@@ -8,6 +8,7 @@
 #include "viewer_path.hpp"
 #include "eawr/presentation/particles/map_attachment_owner.hpp"
 
+#include <godot_cpp/classes/rendering_server.hpp>
 #include <godot_cpp/classes/project_settings.hpp>
 
 #include <cctype>
@@ -493,6 +494,14 @@ bool MapMode::State::ready_space(Node3D& host, const assets::Map& map,
             .write_hud_report = [&state](std::ostream& output) {
                 if (state.hud) output << "  \"hud\": " << state.hud->report_json() << ",\n";
                 output << "  \"perf_overlay\": " << state.perf_report_json() << ",\n";
+                if (auto* server = RenderingServer::get_singleton()) {
+                    const auto mib = [server](const RenderingServer::RenderingInfo info) {
+                        return server->get_rendering_info(info) / (1024 * 1024);
+                    };
+                    output << "  \"video_memory_mib\": {\"textures\": " << mib(RenderingServer::RENDERING_INFO_TEXTURE_MEM_USED)
+                           << ", \"buffers\": " << mib(RenderingServer::RENDERING_INFO_BUFFER_MEM_USED)
+                           << ", \"total\": " << mib(RenderingServer::RENDERING_INFO_VIDEO_MEM_USED) << "},\n";
+                }
                 if (state.live_session) output << "  \"overview_ui\": " << state.overview_report_json() << ",\n";
             },
         });
