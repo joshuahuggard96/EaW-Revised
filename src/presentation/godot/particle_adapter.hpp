@@ -124,6 +124,11 @@ public:
     // impact cores bloom. A stored colour c becomes c * (1 + 0.8 * boost * max(c)^2), so faint
     // smoke edges barely change. Zero, the default, keeps the retail program.
     void set_additive_boost(float boost);
+    // Remastered only, like the boost: additive emitters created while `core` > 0 are laser
+    // bolts, beams or engine glows. Their texture's brightest texels turn white-hot (a core
+    // of `core` times the emitter's own brightness) inside the coloured glow, so it reads as
+    // light and blooms. Battle effects set it around the laser batches' creation only.
+    void set_laser_core(float core);
 
     // The material each emitter was created with. Particle materials pass the
     // same versioned MaterialDescription gate as every other renderer consumer.
