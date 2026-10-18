@@ -681,6 +681,7 @@ std::optional<int> MapMode::process(const double delta) {
     }
     state.sync_net_perf(delta);
     state.sync_perf_overlay();
+    state.sync_fps_counter(delta);
     if (state.space) {
         const std::optional<int> finished = state.space->process(delta);
         state.update_attract_camera(delta, finished);

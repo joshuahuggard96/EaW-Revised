@@ -416,6 +416,11 @@ bool MapMode::State::configure_ready_options(std::string& lighting_argument, std
     if (!state.audio_argument.empty() && state.live_options.fixture.empty()) {
         return state.fail_ready("--eawr-audio requires --eawr-live-session");
     }
+    if (const std::string fps_error =
+            parse_fps_argument(OS::get_singleton()->get_cmdline_user_args(), state.fps_requested);
+        !fps_error.empty()) {
+        return state.fail_ready(fps_error);
+    }
     if (const std::string perf_error =
             parse_perf_overlay_argument(OS::get_singleton()->get_cmdline_user_args(), state.perf_requested);
         !perf_error.empty()) {
