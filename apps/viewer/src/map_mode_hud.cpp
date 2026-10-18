@@ -11,6 +11,7 @@
 #include "viewer_path.hpp"
 
 #include <godot_cpp/classes/canvas_layer.hpp>
+#include <godot_cpp/classes/label.hpp>
 #include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/classes/viewport.hpp>
 
@@ -134,6 +135,54 @@ std::string parse_perf_overlay_argument(const PackedStringArray& arguments, bool
     return {};
 }
 
+std::string parse_fps_argument(const PackedStringArray& arguments, bool& requested) {
+    requested = false;
+    for (int64_t index = 0; index < arguments.size(); ++index) {
+        if (arguments[index] != String("--eawr-fps")) continue;
+        if (index + 1 >= arguments.size()) return "missing value for --eawr-fps";
+        const std::string value = utf8(arguments[++index]);
+        if (value == "on") requested = true;
+        else if (value != "off") return "--eawr-fps expects on or off";
+    }
+    return {};
+}
+
+void MapMode::State::build_fps_counter(Node3D& host) {
+    if (!fps_requested || fps_label != nullptr) return;
+    // Above the HUD (canvas layer 1), below the F3 overlay (100).
+    auto* layer = memnew(CanvasLayer);
+    layer->set_name("EawrFpsCounterLayer");
+    layer->set_layer(99);
+    fps_label = memnew(Label);
+    fps_label->set_name("EawrFpsCounter");
+    fps_label->set_mouse_filter(Control::MOUSE_FILTER_IGNORE);
+    fps_label->set_horizontal_alignment(HORIZONTAL_ALIGNMENT_RIGHT);
+    fps_label->set_anchors_and_offsets_preset(Control::PRESET_TOP_RIGHT);
+    fps_label->set_h_grow_direction(Control::GROW_DIRECTION_BEGIN);
+    fps_label->add_theme_color_override("font_color", Color(0.85F, 1.0F, 0.85F));
+    fps_label->add_theme_color_override("font_outline_color", Color(0.0F, 0.0F, 0.0F, 0.85F));
+    fps_label->set_text("-- FPS");
+    layer->add_child(fps_label);
+    host.add_child(layer);
+}
+
+void MapMode::State::sync_fps_counter(const double delta) {
+    if (fps_label == nullptr) return;
+    fps_seconds += delta;
+    ++fps_frames;
+    if (fps_seconds < 0.25) return;
+    // Sized to the window: 24 px at 1440 lines, with the same margin from the corner.
+    const float height = fps_label->get_viewport_rect().size.y;
+    const int size = std::max(12, static_cast<int>(std::lround(height / 60.0F)));
+    fps_label->add_theme_font_size_override("font_size", size);
+    fps_label->add_theme_constant_override("outline_size", std::max(2, size / 6));
+    fps_label->set_offset(SIDE_RIGHT, -static_cast<float>(size) * 0.6F);
+    fps_label->set_offset(SIDE_TOP, static_cast<float>(size) * 0.4F);
+    fps_label->set_text(String::num_int64(std::lround(static_cast<double>(fps_frames) / fps_seconds)) + " FPS");
+    fps_seconds = 0.0;
+    fps_frames = 0;
+}
+
 void MapMode::State::set_perf_overlay(const bool shown) {
     if (perf == nullptr) {
         if (!shown || perf_host == nullptr) return;
@@ -187,6 +236,7 @@ bool MapMode::State::build_hud(Node3D& host, const std::optional<std::string>& c
     // #558: the overlay's parent; `--eawr-perf-overlay on` shows it from the first frame.
     perf_host = &host;
     if (perf_requested) set_perf_overlay(true);
+    build_fps_counter(host);
     if (!hud_options) return true;
     if (live_session && !hud_faction_given) {
         // The live session's local player; a faction without a shell variant keeps the default.

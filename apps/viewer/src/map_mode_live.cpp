@@ -93,6 +93,7 @@ std::optional<int> MapMode::process(const double delta) {
     state.hud_ms = 0.0;
     core::load_profile::Scope first_frame_scope(core::load_profile::Phase::session);
     state.sync_perf_overlay();
+    state.sync_fps_counter(delta);
     if (state.space) {
         const std::optional<int> finished = state.space->process(delta);
         // #82: selection and orders see the frame the view just drew.
