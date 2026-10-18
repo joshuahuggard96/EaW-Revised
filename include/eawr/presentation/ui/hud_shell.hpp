@@ -303,6 +303,15 @@ struct UnitCardLooks {
     // session does not build (an upgrade object in M2, PU-20).
     std::optional<std::int64_t> build_cost;
     std::string description;
+    // Encyclopedia_Good_Against / Encyclopedia_Vulnerable_To: the listed object types, in order,
+    // and the retail labels (TEXT_GOOD_AGAINST "Strong Against :", TEXT_VULNERABLE_TO
+    // "Weak Against :", UTF-8). The popup shows each list as icons in E_AGAINST_FRAME.
+    std::vector<std::string> good_against;
+    std::vector<std::string> vulnerable_to;
+    std::string good_against_label;
+    // Encyclopedia_Unit_Class through the text DB, e.g. "Class: Fighter" (UTF-8).
+    std::string unit_class;
+    std::string vulnerable_to_label;
 };
 [[nodiscard]] UnitCardLooks unit_card_looks(std::string_view type, const data::Catalog* objects,
                                             const data::ui::TextDatabase* text);

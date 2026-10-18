@@ -1,4 +1,6 @@
 #include "tactical_hud_internal.hpp"
+#include <godot_cpp/classes/system_font.hpp>
+#include <godot_cpp/classes/text_server.hpp>
 
 namespace eawr::presentation::godot_backend {
 using tactical_hud_detail::text;
@@ -231,12 +233,30 @@ bool TacticalHud::build(const vfs::Vfs& filesystem, const data::Catalog* objects
             return text(model::unit_card_looks(type, state.objects,
                 state.text_database ? &*state.text_database : nullptr).description);
         };
+        cards.matchups = [&state](const std::string& type) {
+            const auto looks = model::unit_card_looks(type, state.objects,
+                state.text_database ? &*state.text_database : nullptr);
+            return EawrUnitCards::Matchups{text(looks.good_against_label), text(looks.vulnerable_to_label),
+                looks.good_against, looks.vulnerable_to, text(looks.unit_class)};
+        };
         if (const auto* back = catalog.find("encyclopedia_back")) cards.tooltip_size = back->vec2(data::ui::Field::size).value_or(data::ui::Vec2{});
         if (const auto* body = catalog.find("encyclopedia_text")) {
             cards.tooltip_point_size = body->integer(data::ui::Field::font_point_size).value_or(0);
             if (const auto size = body->vec2(data::ui::Field::size)) cards.tooltip_size.y = size->y;
         }
         cards.font = state.fonts->font(state.card_face);
+        // encyclopedia_text / encyclopedia_header_text author Arial and Arial Bold; the system
+        // supplies it (or a metric-compatible substitute such as Liberation Sans).
+        for (const bool bold : {false, true}) {
+            Ref<SystemFont> arial;
+            arial.instantiate();
+            PackedStringArray names;
+            for (const char* family : {"Arial", "Liberation Sans", "Noto Sans", "DejaVu Sans"}) names.push_back(family);
+            arial->set_font_names(names);
+            arial->set_font_weight(bold ? 700 : 400);
+            arial->set_antialiasing(TextServer::FONT_ANTIALIASING_GRAY);
+            (bold ? cards.header_font : cards.body_font) = arial;
+        }
         cards.cell = [fonts = state.fonts, face = state.card_face](const std::int32_t height) {
             return model::gdi_text_cell(fonts->cache(), face, height);
         };

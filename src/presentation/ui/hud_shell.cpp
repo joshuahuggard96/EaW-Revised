@@ -609,6 +609,31 @@ UnitCardLooks unit_card_looks(const std::string_view type, const data::Catalog* 
             if (!description.empty()) out.description = std::move(description);
         }
     }
+    // The encyclopedia's matchup rows: the listed object types and their labels.
+    const auto types = [&](const std::string_view tag) {
+        std::vector<std::string> listed;
+        const auto* value = resolved.value().value(tag);
+        if (value == nullptr) return listed;
+        const std::string raw = trimmed(value->value.raw_text);
+        std::size_t begin = raw.find_first_not_of(" ,\t\r\n");
+        while (begin != std::string::npos) {
+            const auto end = raw.find_first_of(" ,\t\r\n", begin);
+            listed.emplace_back(std::string_view(raw).substr(begin, end == std::string::npos ? end : end - begin));
+            begin = end == std::string::npos ? end : raw.find_first_not_of(" ,\t\r\n", end);
+        }
+        return listed;
+    };
+    const auto label = [&](const std::string_view key) {
+        const auto* entry = text != nullptr ? text->find(key) : nullptr;
+        return entry != nullptr ? trimmed(data::ui::to_utf8(entry->value)) : std::string();
+    };
+    out.good_against = types("Encyclopedia_Good_Against");
+    out.vulnerable_to = types("Encyclopedia_Vulnerable_To");
+    out.good_against_label = label("TEXT_GOOD_AGAINST");
+    if (const auto* unit_class = resolved.value().value("Encyclopedia_Unit_Class")) {
+        out.unit_class = label(trimmed(unit_class->value.raw_text));
+    }
+    out.vulnerable_to_label = label("TEXT_VULNERABLE_TO");
     return out;
 }
 

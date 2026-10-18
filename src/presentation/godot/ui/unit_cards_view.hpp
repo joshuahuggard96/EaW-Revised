@@ -40,6 +40,15 @@ class EawrUnitCards final : public godot::Control {
     GDCLASS(EawrUnitCards, godot::Control)
 
 public:
+    // A build popup's Strong Against / Weak Against rows (Encyclopedia_Good_Against and
+    // Encyclopedia_Vulnerable_To): labels and the listed object types, drawn as their icons.
+    struct Matchups final {
+        godot::String good_label;
+        godot::String weak_label;
+        std::vector<std::string> good;
+        std::vector<std::string> weak;
+        godot::String unit_class;
+    };
     struct Setup final {
         std::vector<presentation::ui::HudCardSlot> slots;
         std::vector<presentation::ui::HudShellButton> borders;
@@ -49,6 +58,10 @@ public:
         std::function<std::string(const std::string& type)> icon;
         std::function<godot::String(const std::string& type)> name;
         std::function<godot::String(const std::string& type)> description;
+        std::function<Matchups(const std::string& type)> matchups;
+        // The encyclopedia popup's faces (Arial, Arial Bold); the slot face when unset.
+        godot::Ref<godot::Font> body_font;
+        godot::Ref<godot::Font> header_font;
         data::ui::Vec2 tooltip_size{};
         std::int32_t tooltip_point_size{};
         // The slots' face (UI-F3) and its GDI text cell at a glyph height; the size follows the layout.
@@ -129,6 +142,21 @@ private:
     double hovered_since_{};
     bool tooltip_shown_{};
     godot::Rect2 tooltip_rect_;
+    // The open build popup (FoC's encyclopedia, drawn by _draw): its content and the screen
+    // scale of one shell unit at the time it opened.
+    struct Encyclopedia final {
+        std::string type;
+        godot::String name;
+        godot::String unit_class;
+        godot::String description;
+        godot::String detail;  // price and build time
+        godot::String warning; // the disabled reason
+        Matchups matchups;
+        godot::Vector2 origin; // the header's top-left in screen pixels
+        float unit{};          // screen pixels per shell unit
+    };
+    std::optional<Encyclopedia> encyclopedia_;
+    void draw_encyclopedia();
     godot::Vector2 laid_out_{-1.0F, -1.0F};
     std::uint64_t clicks_{};
     std::uint64_t double_clicks_{};

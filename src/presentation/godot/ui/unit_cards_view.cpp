@@ -277,6 +277,8 @@ void EawrUnitCards::update_text() {
     }
     String name;
     tooltip_rect_ = Rect2();
+    const bool had_encyclopedia = encyclopedia_.has_value();
+    encyclopedia_.reset();
     if (tooltip_shown_ && hovered_) {
         const auto card = std::find_if(cards_.begin(), cards_.end(), [&](const Card& shown) { return shown.slot == *hovered_; });
         if (card != cards_.end() && setup_.name) {
@@ -297,24 +299,129 @@ void EawrUnitCards::update_text() {
             // The retail still (card_hover, #425) opens the encyclopedia above the help droid, its
             // header line at about (62, 472)..(327, 491) shell units; the name takes that line.
             tooltip_rect_ = screen(encyclopedia_header);
-            if (card->pad && setup_.tooltip_size.x > 0 && setup_.tooltip_size.y > 0 && card->slot < setup_.slots.size()) {
-                if (setup_.description) {
-                    const auto body = setup_.description(card->type);
-                    if (!body.is_empty()) name += String("\n") + body;
+            // Every card opens FoC's encyclopedia popup: build pads (WBP-36), station build
+            // buttons (with their price and time) and the selected units' cards. _draw draws it
+            // in the retail layout (header, class, description, then the Strong Against / Weak
+            // Against frames side by side) at the header's place.
+            {
+                Encyclopedia shown;
+                shown.type = card->type;
+                shown.name = setup_.name(card->type);
+                if (setup_.description) shown.description = setup_.description(card->type);
+                if (setup_.matchups) shown.matchups = setup_.matchups(card->type);
+                shown.unit_class = shown.matchups.unit_class;
+                if (card->price) shown.detail = String::num_int64(*card->price);
+                if (card->build_frames) {
+                    if (!shown.detail.is_empty()) shown.detail += "   ";
+                    shown.detail += String::num(static_cast<double>(*card->build_frames) / 30.0, 1) + " s";
                 }
-                style.size = model::font_pixels({setup_.tooltip_point_size, false, 1.0},
-                    model::font_screen_height(setup_.space())).glyph_height;
-                const auto& at = setup_.slots[card->slot].card.origin;
-                const double line_width = style.font.is_valid() ? style.font->get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, style.size).x : 0;
-                const float lines = static_cast<float>(std::max(2.0, std::ceil(line_width / setup_.tooltip_size.x) + 1.0));
-                const float height = setup_.tooltip_size.y * lines;
-                tooltip_rect_ = screen({at.x - setup_.tooltip_size.x / 2,
-                    setup_.slots[card->slot].card.rect.top() + setup_.tooltip_size.y,
-                    setup_.tooltip_size.x, height});
-            } else if (!card->disabled_reason.empty()) tooltip_rect_ = screen({62.0F, 391.0F, 650.0F, 100.0F});
+                shown.warning = String(card->disabled_reason.c_str());
+                const Rect2 header = screen(encyclopedia_header);
+                shown.origin = header.position;
+                shown.unit = header.size.x / encyclopedia_header.width;
+                encyclopedia_ = std::move(shown);
+                // The popup is drawn whole by _draw; the header line's text box stays empty.
+                name = String();
+                tooltip_rect_ = Rect2();
+                queue_redraw();
+            }
         }
     }
     tooltip_.draw(*this, style, name, tooltip_rect_, HORIZONTAL_ALIGNMENT_CENTER, true, true, 1.0F, 1.0F);
+    if (had_encyclopedia && !encyclopedia_) queue_redraw();
+}
+
+void EawrUnitCards::draw_encyclopedia() {
+    // FoC's encyclopedia popup in shell units (u), measured on a retail still of a hovered
+    // building: the 262-wide grey header (I_CORRUPTION_ENCYCLOPEDIA_HEADER) with the unit's icon
+    // over its left end, name and class beside it; a navy body with the description; then
+    // "Strong Against :" in green and "Weak Against :" in red, each over a tinted
+    // E_AGAINST_FRAME (129 x 43) holding up to three unit icons.
+    const Encyclopedia& e = *encyclopedia_;
+    const float u = e.unit;
+    // Moved down once the height is known: the bottom edge stays just above the help droid,
+    // and a longer description grows the popup upward, as retail does.
+    Vector2 origin = e.origin;
+    const auto at = [&](const float x, const float y) { return Vector2(origin.x + x * u, origin.y + y * u); };
+    const auto box = [&](const float x, const float y, const float w, const float h) { return Rect2(at(x, y), Vector2(w * u, h * u)); };
+    const Ref<Font> body = setup_.body_font.is_valid() ? setup_.body_font : setup_.font;
+    const Ref<Font> bold = setup_.header_font.is_valid() ? setup_.header_font : body;
+    if (body.is_null()) return;
+    constexpr float width = 262.0F;
+    const int body_size = std::max(8, static_cast<int>(std::lround(9.5F * u)));
+    const int name_size = std::max(8, static_cast<int>(std::lround(10.0F * u)));
+    const int label_size = std::max(7, static_cast<int>(std::lround(8.5F * u)));
+    // The description wraps inside the body; its height sizes the popup.
+    const float text_width = (width - 8.0F) * u;
+    String text = e.description;
+    if (!e.warning.is_empty()) text += String(text.is_empty() ? "" : "\n") + e.warning;
+    const float text_height = text.is_empty() ? 0.0F
+        : body->get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, text_width, body_size).y;
+    const bool rows = !e.matchups.good.empty() || !e.matchups.weak.empty();
+    constexpr float description_top = 44.0F;
+    const float rows_top = description_top + text_height / u + 6.0F;
+    const float bottom = rows ? rows_top + 11.0F + 43.0F + 2.0F : rows_top;
+    // 180 u below the header line: the popup's bottom just over the help droid's head.
+    constexpr float anchored_bottom = 180.0F;
+    origin.y += (anchored_bottom - bottom) * u;
+    // Navy body under the header, a thin light border round the whole popup.
+    draw_rect(box(0, 0, width, bottom), Color(0.06F, 0.12F, 0.33F, 0.92F), true);
+    // The header bar: light grey shading to a darker grey, as on the retail still.
+    {
+        const Rect2 bar = box(0, 0, width, 20);
+        PackedVector2Array corners;
+        corners.push_back(bar.position);
+        corners.push_back(bar.position + Vector2(bar.size.x, 0));
+        corners.push_back(bar.position + bar.size);
+        corners.push_back(bar.position + Vector2(0, bar.size.y));
+        PackedColorArray shades;
+        const Color light(0.62F, 0.64F, 0.68F, 1.0F), dark(0.42F, 0.44F, 0.49F, 1.0F);
+        shades.push_back(light);
+        shades.push_back(light);
+        shades.push_back(dark);
+        shades.push_back(dark);
+        draw_polygon(corners, shades);
+    }
+    draw_rect(box(0, 0, width, bottom), Color(0.55F, 0.6F, 0.75F, 0.8F), false, std::max(1.0F, u * 0.6F));
+    // The unit's icon over the header's left end, then its name and class.
+    const Ref<Texture2D> icon = portrait(e.type);
+    if (icon.is_valid()) draw_texture_rect(icon, box(3, -3, 36, 36), false);
+    constexpr float text_left = 54.0F;
+    const auto line = [&](const Ref<Font>& font, const String& value, const float x, const float centre_y, const int size,
+                          const Color& colour, const float max_width, const HorizontalAlignment align) {
+        const float baseline = origin.y + centre_y * u + (font->get_ascent(size) - font->get_descent(size)) / 2.0F;
+        draw_string(font, Vector2(origin.x + x * u, baseline), value, align, max_width * u, size, colour);
+    };
+    line(bold, e.name, text_left, 10.0F, name_size, Color(1, 1, 1, 1), width - text_left - 4.0F, HORIZONTAL_ALIGNMENT_LEFT);
+    if (!e.unit_class.is_empty()) {
+        line(body, e.unit_class, text_left, 29.0F, body_size, Color(0.9F, 0.9F, 0.9F, 1), width - text_left - 74.0F,
+             HORIZONTAL_ALIGNMENT_LEFT);
+    }
+    if (!e.detail.is_empty()) {
+        // encyclopedia_cost_text: the price and build time right-justified on the class line.
+        line(body, e.detail, width - 78.0F, 29.0F, body_size, Color(1.0F, 0.85F, 0.35F, 1), 74.0F, HORIZONTAL_ALIGNMENT_RIGHT);
+    }
+    draw_line(at(4, 39), at(width - 4, 39), Color(1, 1, 1, 0.18F), std::max(1.0F, u * 0.5F));
+    if (!text.is_empty()) {
+        draw_multiline_string(body, Vector2(origin.x + 4.0F * u, origin.y + description_top * u + body->get_ascent(body_size)),
+                              text, HORIZONTAL_ALIGNMENT_LEFT, text_width, body_size, -1, Color(0.92F, 0.92F, 0.92F, 1));
+    }
+    if (!rows) return;
+    draw_line(at(4, rows_top - 3), at(width - 4, rows_top - 3), Color(1, 1, 1, 0.18F), std::max(1.0F, u * 0.5F));
+    const Ref<Texture2D> frame = setup_.texture ? setup_.texture("e_against_frame.tga") : Ref<Texture2D>();
+    const auto column = [&](const float x, const String& label, const std::vector<std::string>& types, const Color& text_colour,
+                            const Color& tint) {
+        line(body, label, x + 1.0F, rows_top + 4.0F, label_size, text_colour, 128.0F, HORIZONTAL_ALIGNMENT_LEFT);
+        const Rect2 strip = box(x, rows_top + 10.0F, 129.0F, 43.0F);
+        if (frame.is_valid()) draw_texture_rect(frame, strip, false, tint);
+        else draw_rect(strip, tint, true);
+        for (std::size_t index = 0; index < types.size() && index < 3; ++index) {
+            const Ref<Texture2D> each = portrait(types[index]);
+            if (each.is_valid()) draw_texture_rect(each, box(x + 2.5F + 41.5F * static_cast<float>(index), rows_top + 11.5F, 40, 40), false);
+        }
+    };
+    column(0.0F, e.matchups.good_label, e.matchups.good, Color(0.2F, 0.85F, 0.2F, 1), Color(0.1F, 0.75F, 0.15F, 1));
+    column(width - 129.0F, e.matchups.weak_label, e.matchups.weak, Color(0.95F, 0.25F, 0.15F, 1), Color(0.95F, 0.3F, 0.15F, 1));
 }
 
 void EawrUnitCards::draw_bar(const model::HudBar& bar, const std::int32_t level, const double percent) {
@@ -404,6 +511,7 @@ void EawrUnitCards::_draw() {
         }
     }
     if (tooltip_rect_.has_area()) draw_rect(tooltip_rect_, Color(0.0F, 0.0F, 0.0F, 0.75F));
+    if (encyclopedia_) draw_encyclopedia();
 }
 
 std::string EawrUnitCards::report_json() const {
