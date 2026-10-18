@@ -6,6 +6,8 @@
 #include "gpu_memory_trace.hpp"
 #include "render_profile_viewport.hpp"
 
+#include <godot_cpp/classes/rendering_server.hpp>
+
 namespace eawr::presentation::godot_backend {
 namespace map_mode_detail {
 
@@ -136,6 +138,15 @@ bool MapMode::State::write_report() const {
     if (hud) output << "  \"hud\": " << hud->report_json() << ",\n";
     output << "  \"perf_overlay\": " << perf_report_json() << ",\n";
     output << "  \"net_perf\": " << net_perf_json() << ",\n";
+    if (auto* server = RenderingServer::get_singleton()) {
+        // Godot's own video memory accounting at the report, in MiB.
+        const auto mib = [server](const RenderingServer::RenderingInfo info) {
+            return server->get_rendering_info(info) / (1024 * 1024);
+        };
+        output << "  \"video_memory_mib\": {\"textures\": " << mib(RenderingServer::RENDERING_INFO_TEXTURE_MEM_USED)
+               << ", \"buffers\": " << mib(RenderingServer::RENDERING_INFO_BUFFER_MEM_USED)
+               << ", \"total\": " << mib(RenderingServer::RENDERING_INFO_VIDEO_MEM_USED) << "},\n";
+    }
     write_report_scene(output);
     write_report_lighting(output);
     write_report_fog(output);
