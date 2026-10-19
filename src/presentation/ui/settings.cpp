@@ -28,6 +28,7 @@ namespace {
     switch (setting) {
     case RenderProfileSetting::retail: return "retail";
     case RenderProfileSetting::enhanced: return "enhanced";
+    case RenderProfileSetting::remastered: return "remastered";
     case RenderProfileSetting::automatic: break;
     }
     return "automatic";
@@ -37,6 +38,7 @@ namespace {
     if (text == "automatic") return RenderProfileSetting::automatic;
     if (text == "retail") return RenderProfileSetting::retail;
     if (text == "enhanced") return RenderProfileSetting::enhanced;
+    if (text == "remastered") return RenderProfileSetting::remastered;
     return std::nullopt;
 }
 
@@ -79,6 +81,16 @@ const IntField fields[] = {
     EAWR_SETTINGS_FIELD("video.gamma_permille", video.gamma_permille, 0, 4000),
     EAWR_SETTINGS_FIELD("video.widescreen", video.widescreen, 0, 1),
     EAWR_SETTINGS_FIELD("video.hardware_cursor", video.hardware_cursor, 0, 1),
+    EAWR_SETTINGS_FIELD("remastered.render_scale", remastered.render_scale_percent, 50, 200),
+    EAWR_SETTINGS_FIELD("remastered.antialiasing", remastered.antialiasing, 0, remastered_antialiasing_count - 1),
+    EAWR_SETTINGS_FIELD("remastered.studio", remastered.studio_percent, 0, 100),
+    EAWR_SETTINGS_FIELD("remastered.explosions", remastered.explosions_percent, 0, 400),
+    EAWR_SETTINGS_FIELD("remastered.lasers", remastered.lasers_percent, 0, 400),
+    EAWR_SETTINGS_FIELD("remastered.engines", remastered.engines_percent, 0, 400),
+    EAWR_SETTINGS_FIELD("remastered.glow", remastered.glow_percent, 50, 800),
+    EAWR_SETTINGS_FIELD("remastered.exposure", remastered.exposure_percent, 25, 400),
+    EAWR_SETTINGS_FIELD("remastered.reflections", remastered.reflections_percent, 0, 400),
+    EAWR_SETTINGS_FIELD("remastered.fps_counter", remastered.fps_counter, 0, 1),
     EAWR_SETTINGS_FIELD("gameplay.tactical_speed", gameplay.tactical_speed, 0, speed_last),
     EAWR_SETTINGS_FIELD("gameplay.strategic_speed", gameplay.strategic_speed, 0, speed_last),
     EAWR_SETTINGS_FIELD("gameplay.scroll_stop", gameplay.scroll_stop, 0, scroll_last),
@@ -335,7 +347,7 @@ std::vector<std::string> clamp_settings(PlayerSettings& settings) {
             repaired.push_back(detail_key(slot));
         }
     }
-    if (static_cast<int>(settings.video.render_profile) > static_cast<int>(RenderProfileSetting::enhanced)) {
+    if (static_cast<int>(settings.video.render_profile) > static_cast<int>(RenderProfileSetting::remastered)) {
         settings.video.render_profile = RenderProfileSetting::automatic;
         repaired.emplace_back("video.render_profile");
     }

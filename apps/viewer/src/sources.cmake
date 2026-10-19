@@ -151,6 +151,7 @@ set(EAWR_VIEWER_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/attract_camera.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/options_mode.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/options_screen.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/options_remastered.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/settings_store.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/profile_store.cpp"
 )

@@ -49,8 +49,9 @@ inline constexpr int display_size_maximum = 16384;
 inline constexpr int display_size_minimum = 320;
 
 // The render profile, a project-authored setting (ST-P1): the retail look or the enhanced
-// look (anti-aliasing and anisotropic filtering). `automatic` is the run's own choice.
-enum class RenderProfileSetting : std::uint8_t { automatic, retail, enhanced };
+// look (anti-aliasing and anisotropic filtering), or the fork's remastered look (linear light,
+// engine-lit materials). `automatic` is the run's own choice.
+enum class RenderProfileSetting : std::uint8_t { automatic, retail, enhanced, remastered };
 
 struct AudioSettings final {
     int master_percent{master_default_percent};
@@ -96,6 +97,27 @@ struct VideoSettings final {
     if (!focused) lower(30);
     return cap;
 }
+
+// The fork's remastered graphics page: the --eawr-* graphics options as percents (1.0 = 100),
+// so a slider stop is the stored value. A command-line option overrides its saved value.
+// `antialiasing` 0 is automatic (FSR 2 in remastered at render scale 100 or less, else the
+// profile's own); then profile, SMAA, TAA, FSR 2 and off.
+inline constexpr int remastered_antialiasing_count = 6;
+
+struct RemasteredSettings final {
+    int render_scale_percent{100};
+    int antialiasing{};
+    int studio_percent{100};
+    int explosions_percent{100};
+    int lasers_percent{50};
+    int engines_percent{100};
+    int glow_percent{300};
+    int exposure_percent{125};
+    int reflections_percent{100};
+    bool fps_counter{};
+
+    friend bool operator==(const RemasteredSettings&, const RemasteredSettings&) = default;
+};
 
 struct GameplaySettings final {
     int tactical_speed{speed_step_default};
@@ -144,6 +166,7 @@ struct NetworkSettings final {
 struct PlayerSettings final {
     AudioSettings audio;
     VideoSettings video;
+    RemasteredSettings remastered;
     GameplaySettings gameplay;
     NetworkSettings network;
     // ST-K3: optional physical WASD pan; the default keeps retail arrow keys.
