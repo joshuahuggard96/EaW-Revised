@@ -440,11 +440,37 @@ void test_session_values() {
 
 } // namespace
 
+// The fork's remastered graphics page: defaults equal the --eawr-* defaults, the group
+// round-trips, the remastered profile is a stored value and wild values are held.
+void test_remastered() {
+    const ui::RemasteredSettings defaults;
+    expect(defaults.render_scale_percent == 100 && defaults.antialiasing == 0 && defaults.studio_percent == 100
+               && defaults.explosions_percent == 100 && defaults.lasers_percent == 50 && defaults.engines_percent == 100
+               && defaults.glow_percent == 300 && defaults.exposure_percent == 125 && defaults.reflections_percent == 100
+               && !defaults.fps_counter,
+           "remastered defaults match the command-line defaults");
+    ui::PlayerSettings changed;
+    changed.video.render_profile = ui::RenderProfileSetting::remastered;
+    changed.remastered = {200, 4, 100, 150, 75, 125, 400, 110, 50, true};
+    const ui::SettingsLoad loaded = ui::parse_settings(ui::serialize_settings(changed));
+    expect(!loaded.defaulted && loaded.notes.empty() && loaded.settings == changed, "the remastered group round-trips");
+    ui::PlayerSettings wild;
+    wild.remastered = {10, 9, 500, -5, 999, 401, 20, 9000, -1, true};
+    static_cast<void>(ui::clamp_settings(wild));
+    expect(wild.remastered.render_scale_percent == 50 && wild.remastered.antialiasing == 5
+               && wild.remastered.studio_percent == 100 && wild.remastered.explosions_percent == 0
+               && wild.remastered.lasers_percent == 400 && wild.remastered.engines_percent == 400
+               && wild.remastered.glow_percent == 50 && wild.remastered.exposure_percent == 400
+               && wild.remastered.reflections_percent == 0,
+           "remastered values are held to their ranges");
+}
+
 int main() {
     test_performance_deviations();
     test_online_settings();
     test_render_thread_settings();
     test_reinforcement_area_settings();
+    test_remastered();
     test_defaults();
     expect(ui::hover_owner_names_enabled(ui::GameplaySettings{}, true), "hover names default on in multiplayer");
     expect(!ui::hover_owner_names_enabled(ui::GameplaySettings{}, false), "hover names default off in solo");

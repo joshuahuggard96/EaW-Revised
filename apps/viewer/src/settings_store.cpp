@@ -202,12 +202,14 @@ RenderProfile resolve_render_profile(const ui::RenderProfileSetting setting, con
     switch (setting) {
     case ui::RenderProfileSetting::retail: return RenderProfile::retail;
     case ui::RenderProfileSetting::enhanced: return RenderProfile::enhanced;
+    case ui::RenderProfileSetting::remastered: return RenderProfile::remastered;
     case ui::RenderProfileSetting::automatic: break;
     }
     return fallback;
 }
 
 ui::RenderProfileSetting setting_of(const RenderProfile profile) noexcept {
+    if (profile == RenderProfile::remastered) return ui::RenderProfileSetting::remastered;
     return profile == RenderProfile::enhanced ? ui::RenderProfileSetting::enhanced : ui::RenderProfileSetting::retail;
 }
 

@@ -1,5 +1,7 @@
 #include "options_screen.hpp"
 #include "dialog_rectangles.hpp"
+#include "options_remastered.hpp"
+#include "remastered_settings.hpp"
 
 #include "render_profile_viewport.hpp"
 #include "viewer_path.hpp"
@@ -87,7 +89,23 @@ constexpr PageInfo pages[] = {
     {EawrOptionsScreen::Page::keyboard, "keyboard", "IDD_KEYBOARD_OPTIONS_DIALOG"},
     {EawrOptionsScreen::Page::network, "network", "IDD_NETWORK_OPTIONS_DIALOG"},
     {EawrOptionsScreen::Page::game_menu, "game", "IDD_GAME_OPTIONS_DIALOG"},
+    {EawrOptionsScreen::Page::remastered, "remastered", "IDD_ADVANCED_VIDEO_OPTIONS_DIALOG"},
 };
+
+[[nodiscard]] bool is_remastered_row(const std::string& id) {
+    return std::any_of(options_remastered::rows().begin(), options_remastered::rows().end(),
+                       [&id](const options_remastered::Row& row) { return row.id == id; });
+}
+
+// The running profile as the remastered page's profile row counts it.
+[[nodiscard]] int running_profile_stop() {
+    switch (running_render_profile()) {
+    case RenderProfile::enhanced: return 1;
+    case RenderProfile::remastered: return 2;
+    case RenderProfile::retail: break;
+    }
+    return 0;
+}
 
 [[nodiscard]] std::string keyboard_dialog(const int number) {
     return number <= 1 ? "IDD_KEYBOARD_OPTIONS_DIALOG" : "IDD_KEYBOARD_OPTIONS_DIALOG_" + std::to_string(number);
@@ -485,6 +503,12 @@ void EawrOptionsScreen::rebuild_page() {
         button("IDC_OK", "Accept", 1, 1);
         service = std::move(performance);
     }
+    if (page_ == Page::video) options_remastered::add_video_button(service);
+    if (page_ == Page::remastered && !options_remastered::build_page(service)) {
+        failure_ = "dialog " + dialog_name + " lacks the controls the remastered page is built from";
+        notes_.push_back(failure_);
+        return;
+    }
     if (page_ == Page::network) {
         // Keep every authored control in place. Extend the loaded dialog with a
         // service column beside the retail network controls.
@@ -754,7 +778,7 @@ void EawrOptionsScreen::wire_page() {
             aa->set_min(0.0);
             aa->set_max(1.0);
             aa->set_step(1.0);
-            aa->set_value_no_signal(shown == RenderProfile::enhanced ? 1.0 : 0.0);
+            aa->set_value_no_signal(shown == RenderProfile::retail ? 0.0 : 1.0);
         }
         if (auto* detail = has("IDC_DETAIL_LEVEL_SLIDER") ? slider("IDC_DETAIL_LEVEL_SLIDER") : nullptr) {
             detail->set_min(0.0);
@@ -819,6 +843,32 @@ void EawrOptionsScreen::wire_page() {
             }
         }
         if (has("IDC_APPLY")) disable(*state.controls["IDC_APPLY"], "IDC_APPLY", "Detail levels are not built yet.");
+        break;
+    }
+    case Page::remastered: {
+        for (const options_remastered::Row& row : options_remastered::rows()) {
+            const std::string id(row.id);
+            auto* control = has(id.c_str()) ? slider(id.c_str()) : nullptr;
+            if (control == nullptr) continue;
+            control->set_min(row.minimum);
+            control->set_max(row.maximum);
+            control->set_step(row.step);
+            const int value = options_remastered::value_of(draft_, row.id, running_profile_stop());
+            control->set_value_no_signal(value);
+            show_remastered_value(id, value);
+            if (const auto reason = options_remastered::pinned_reason(row.id)) disable(*control, id, *reason);
+        }
+        const std::string fps(options_remastered::fps_check);
+        if (has(fps.c_str())) {
+            check(fps.c_str())->set_pressed_no_signal(saved_fps_counter(draft_.remastered)
+                                                      || remastered_pins().fps_counter);
+            if (const auto reason = options_remastered::pinned_reason(fps)) disable(*state.controls[fps], fps, *reason);
+        }
+        if (has("IDC_APPLY")) {
+            auto* apply = Object::cast_to<BaseButton>(state.controls["IDC_APPLY"]);
+            apply->set_disabled(true);
+            apply->set_tooltip_text(text("Nothing to apply yet."));
+        }
         break;
     }
     case Page::gameplay: {
@@ -958,13 +1008,20 @@ void EawrOptionsScreen::on_toggled(const bool pressed, String id) {
             }
         }
     }
-    if (page_ == Page::video && is_video_edit(name)) {
+    if ((page_ == Page::video && is_video_edit(name)) || (page_ == Page::remastered && name == options_remastered::fps_check)) {
         dirty_ = true;
         if (auto* apply = Object::cast_to<BaseButton>(state_->controls["IDC_APPLY"])) {
             apply->set_disabled(false);
             apply->set_tooltip_text(String());
         }
     }
+}
+
+void EawrOptionsScreen::show_remastered_value(const std::string& row, const int value) {
+    if (!state_) return;
+    const auto found = state_->controls.find(options_remastered::value_label(row));
+    if (found == state_->controls.end()) return;
+    if (auto* label = Object::cast_to<EawrUiLabel>(found->second)) label->set_text(text(options_remastered::value_text(row, value)));
 }
 
 void EawrOptionsScreen::on_value_changed(const double value, String id) {
@@ -978,6 +1035,16 @@ void EawrOptionsScreen::on_value_changed(const double value, String id) {
         else if (name == "IDC_SLIDER_DIALOG_VOLUME") draft_.audio.speech_percent = percent;
         else draft_.audio.music_percent = percent;
         apply_preview();
+        return;
+    }
+    if (page_ == Page::remastered && is_remastered_row(name)) {
+        if (name == "IDC_REM_PROFILE") state_->profile_touched = true;
+        show_remastered_value(name, static_cast<int>(value + 0.5));
+        dirty_ = true;
+        if (auto* apply = Object::cast_to<BaseButton>(state_->controls["IDC_APPLY"])) {
+            apply->set_disabled(false);
+            apply->set_tooltip_text(String());
+        }
         return;
     }
     if (page_ == Page::video && is_video_edit(name)) {
@@ -1066,14 +1133,25 @@ void EawrOptionsScreen::apply_committed(const model::VideoSettings& previous_vid
     // last committed values, advancing the baseline after Apply as well as Accept.
     if (window_changed || targets.vsync || targets.texture_detail) apply_video(video, targets, report);
     // The render profile is the player's explicit choice only; "automatic" leaves the run's own.
-    if (video.render_profile != previous_video.render_profile
-        && video.render_profile != model::RenderProfileSetting::automatic) {
-        if (auto* tree = Object::cast_to<SceneTree>(Engine::get_singleton()->get_main_loop())) {
-            const RenderProfile profile = resolve_render_profile(committed_.video.render_profile, RenderProfile::retail);
+    auto* tree = Object::cast_to<SceneTree>(Engine::get_singleton()->get_main_loop());
+    if (committed_.video.render_profile != model::RenderProfileSetting::automatic && tree != nullptr
+        && !remastered_pins().render_profile) {
+        const RenderProfile profile = resolve_render_profile(committed_.video.render_profile, RenderProfile::retail);
+        if (profile == running_render_profile()) {
+            // Nothing to change.
+        } else if (profile == RenderProfile::remastered || running_render_profile() == RenderProfile::remastered) {
+            // The remastered output mode decides how shaders compile: it changes at the next start.
+            report.skipped.emplace_back(std::string("render profile: ") + std::string(render_profile_name(profile))
+                                        + " after a restart");
+        } else {
             apply_render_profile(*tree->get_root(), profile);
+            running_render_profile() = profile;
             report.applied.emplace_back(std::string("render profile: ") + std::string(render_profile_name(profile)));
         }
     }
+    // The fork's remastered page: the next battle reads the values, the viewport takes scale and AA now.
+    apply_remastered_globals(committed_.remastered);
+    if (tree != nullptr) apply_remastered_viewport(*tree->get_root(), committed_.remastered);
     last_apply_ = std::move(report);
 }
 
@@ -1110,8 +1188,11 @@ void EawrOptionsScreen::sync_draft_from_controls() {
         }
         if (state.profile_touched) {
             if (const auto v = value("IDC_ANTI_ALIAS_SLIDER")) {
-                draft_.video.render_profile = *v > 0.5 ? model::RenderProfileSetting::enhanced
-                                                       : model::RenderProfileSetting::retail;
+                // Max keeps a remastered choice (the fork's remastered page sets it).
+                const bool remastered = resolve_render_profile(draft_.video.render_profile, running_render_profile())
+                    == RenderProfile::remastered;
+                draft_.video.render_profile = *v <= 0.5 ? model::RenderProfileSetting::retail
+                    : remastered ? model::RenderProfileSetting::remastered : model::RenderProfileSetting::enhanced;
             }
         }
         break;
@@ -1122,6 +1203,15 @@ void EawrOptionsScreen::sync_draft_from_controls() {
         if (const auto v = value("IDC_HOVER_OWNER_NAMES"); v && (*v > 0.5) != model::hover_owner_names_enabled(draft_.gameplay, options_.multiplayer))
             draft_.gameplay.hover_owner_names = *v > 0.5;
         if (const auto v = value("IDC_GAME_SPEED_SLIDER")) draft_.gameplay.tactical_speed = static_cast<int>(*v + 0.5);
+        break;
+    case Page::remastered:
+        for (const options_remastered::Row& row : options_remastered::rows()) {
+            const std::string id(row.id);
+            if (const auto v = value(id.c_str())) {
+                options_remastered::store(draft_, row.id, static_cast<int>(*v + 0.5), state.profile_touched);
+            }
+        }
+        if (const auto v = value(std::string(options_remastered::fps_check).c_str())) draft_.remastered.fps_counter = *v > 0.5;
         break;
     case Page::network: {
         const auto edit = [&](const char* id) { const auto found = state.controls.find(id); return found != state.controls.end()
@@ -1155,6 +1245,10 @@ void EawrOptionsScreen::commit_page(const bool leave) {
     case Page::audio: committed_.audio = draft_.audio; break;
     case Page::video: committed_.video = draft_.video; break;
     case Page::performance: committed_.video.render_thread = draft_.video.render_thread; break;
+    case Page::remastered:
+        committed_.remastered = draft_.remastered;
+        committed_.video.render_profile = draft_.video.render_profile;
+        break;
     case Page::gameplay: committed_.gameplay = draft_.gameplay; break;
     case Page::network: committed_.network = draft_.network; break;
     case Page::keyboard: committed_.camera_wasd = draft_.camera_wasd; break;
@@ -1167,7 +1261,10 @@ void EawrOptionsScreen::commit_page(const bool leave) {
     // The viewer's other readers (the next battle's buses, the live speed step) see the same record.
     ActiveSettings::set(committed_);
     dirty_ = false;
-    if (leave) leave_to_hub();
+    if (leave && page_ == Page::remastered) {
+        page_ = Page::video; // the page opened from the video page returns there
+        rebuild_page();
+    } else if (leave) leave_to_hub();
     else if (state_) {
         if (auto* apply = Object::cast_to<BaseButton>(state_->controls["IDC_APPLY"])) {
             apply->set_disabled(true);
@@ -1184,7 +1281,7 @@ void EawrOptionsScreen::cancel_page() {
         last_apply_ = std::move(report);
     }
     draft_ = committed_;
-    if (page_ == Page::advanced_video) {
+    if (page_ == Page::advanced_video || page_ == Page::remastered) {
         page_ = Page::video;
         rebuild_page();
         return;
@@ -1201,6 +1298,7 @@ void EawrOptionsScreen::defaults_page() {
         rebuild_page();
         on_item_selected(defaults.video.render_thread == model::RenderThreadSetting::safe ? 1 : 0, text("IDC_RENDER_THREAD"));
         return;
+    case Page::remastered: draft_.remastered = defaults.remastered; break;
     case Page::gameplay:
         // The honoured option only: the others are not editable here, so Defaults leaves them.
         draft_.gameplay.tactical_speed = defaults.gameplay.tactical_speed;
@@ -1312,6 +1410,13 @@ void EawrOptionsScreen::handle_button(const std::string& id) {
         else if (id == "IDC_APPLY") commit_page(false);
         else if (id == "IDC_CANCEL") cancel_page();
         else if (id == "IDC_ADVANCED") open_page(Page::advanced_video);
+        else if (id == options_remastered::video_button) open_page(Page::remastered);
+        break;
+    case Page::remastered:
+        if (id == "IDC_OK") commit_page(true);
+        else if (id == "IDC_APPLY") commit_page(false);
+        else if (id == "IDC_CANCEL") cancel_page();
+        else if (id == options_remastered::defaults_button) defaults_page();
         break;
     case Page::performance:
         if (id == "IDC_OK") commit_page(true);

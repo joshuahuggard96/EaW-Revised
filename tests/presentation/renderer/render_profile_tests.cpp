@@ -113,9 +113,14 @@ RenderProfileRun run(const bool interactive, const bool self_test, const bool ca
         .resize_test = resize_test};
 }
 
-void only_a_players_live_view_is_enhanced() {
-    check(default_render_profile(run(true, false, false, false)) == RenderProfile::enhanced,
+void only_a_players_live_view_is_remastered() {
+    check(default_render_profile(run(true, false, false, false)) == RenderProfile::remastered,
           "an interactive run without capture or test is a player's view");
+    RenderProfileRun front_end = run(false, false, false, false);
+    front_end.front_end = true;
+    check(default_render_profile(front_end) == RenderProfile::remastered, "the front end is a player's view");
+    front_end.capture = true;
+    check(default_render_profile(front_end) == RenderProfile::retail, "a front-end capture keeps the retail look");
     check(default_render_profile(run(false, false, false, false)) == RenderProfile::retail,
           "a fixed run keeps the retail look");
     check(default_render_profile(run(false, false, true, false)) == RenderProfile::retail,
@@ -139,7 +144,7 @@ int main() {
     names_round_trip();
     render_scales_parse_within_bounds();
     shadow_budgets_are_bounded_and_ordered();
-    only_a_players_live_view_is_enhanced();
+    only_a_players_live_view_is_remastered();
     if (failures != 0) return EXIT_FAILURE;
     std::cout << "render profile contracts passed\n";
     return EXIT_SUCCESS;

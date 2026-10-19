@@ -43,7 +43,8 @@ public:
     // `game_menu` is the in-game menu itself (IDD_GAME_OPTIONS_DIALOG, in_game context only): Options opens
     // the hub, whose Back returns here; Resume closes the screen; Quit Game asks first, then closes it with
     // quit_requested() set.
-    enum class Page : std::uint8_t { hub, audio, video, performance, advanced_video, gameplay, keyboard, network, game_menu };
+    // `remastered` is the fork's Remastered Graphics page (options_remastered.hpp), opened from the video page.
+    enum class Page : std::uint8_t { hub, audio, video, performance, advanced_video, gameplay, keyboard, network, game_menu, remastered };
 
     struct Options final {
         // The content the caller already mounted (its VFS); otherwise the roots below are mounted
@@ -139,6 +140,7 @@ private:
     void on_pressed(godot::String id);
     void on_toggled(bool pressed, godot::String id);
     void on_value_changed(double value, godot::String id);
+    void show_remastered_value(const std::string& row, int value);
     void on_item_selected(int64_t index, godot::String id);
 
     void handle_button(const std::string& id);
