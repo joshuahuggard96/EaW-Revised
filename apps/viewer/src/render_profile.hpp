@@ -158,17 +158,18 @@ inline constexpr float supersampling_replaces_msaa = 1.5F;
 // The run facts that pick the default profile.
 struct RenderProfileRun final {
     bool interactive{}; // --eawr-camera-interactive
+    bool front_end{};   // --eawr-front-end
     bool self_test{};   // --eawr-camera-input-selftest
     bool capture{};     // --eawr-capture
     bool resize_test{}; // --eawr-window-resize-test
 };
 
-// An interactive run that captures and tests nothing is a player's view;
-// every other run (fixed captures, probes, self-tests, reports) is evidence
-// and keeps the retail look unless --eawr-render-profile says otherwise.
+// An interactive or front-end run that captures and tests nothing is a player's view and
+// gets the fork's remastered look; every other run (fixed captures, probes, self-tests,
+// reports) is evidence and keeps the retail look unless --eawr-render-profile says otherwise.
 [[nodiscard]] constexpr RenderProfile default_render_profile(const RenderProfileRun& run) noexcept {
-    return run.interactive && !run.self_test && !run.capture && !run.resize_test
-        ? RenderProfile::enhanced : RenderProfile::retail;
+    return (run.interactive || run.front_end) && !run.self_test && !run.capture && !run.resize_test
+        ? RenderProfile::remastered : RenderProfile::retail;
 }
 
 } // namespace eawr::presentation::godot_backend

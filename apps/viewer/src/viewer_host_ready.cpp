@@ -3,6 +3,7 @@
 #include "audio_output.hpp"
 #include "font_provision.hpp"
 #include "gpu_memory_trace.hpp"
+#include "remastered_settings.hpp"
 #include "settings_store.hpp"
 #include "startup_trace.hpp"
 #include <godot_cpp/classes/display_server.hpp>
@@ -77,6 +78,8 @@ void ViewerHost::_ready() try {
         || options_->camera_input_selftest || options_->window_resize_test.has_value() || options_->headless_probe
         || options_->benchmark || options_->renderer_runtime_test || options_->startup_metrics;
     std::optional<RenderProfile> saved_render_profile;
+    // The fork's remastered graphics page (remastered_settings.hpp); a --eawr-* option wins.
+    presentation::ui::RemasteredSettings saved_remastered;
     if (!evidence_run) {
         const SettingsStore store(options_->settings_file);
         if (store.exists()) {
@@ -99,6 +102,7 @@ void ViewerHost::_ready() try {
                     saved_render_profile = resolve_render_profile(saved.settings.video.render_profile,
                                                                   RenderProfile::retail);
                 }
+                saved_remastered = saved.settings.remastered;
                 ActiveSettings::set(std::move(saved.settings));
             }
         }
@@ -108,17 +112,35 @@ void ViewerHost::_ready() try {
     // without saved settings has them at FoC's 0.75 (BattleAudio and MenuAudio use these).
     if (!audio_buses::exist()) audio_buses::ensure(audio::MixLevels{});
 
-    // Retail for every capture and test, enhanced for a player's view (#184), or what the
+    // Retail for every capture and test, remastered for a player's view (fork; upstream #184 picks enhanced), or what the
     // player chose (#2927); --eawr-render-profile wins over both.
     const RenderProfile render_profile = requested_render_profile.value_or(saved_render_profile.value_or(
         default_render_profile({
             .interactive = options_->camera_interactive,
+            .front_end = options_->front_end,
             .self_test = options_->camera_input_selftest,
             .capture = !options_->capture_path.empty(),
             .resize_test = options_->window_resize_test.has_value(),
         })));
+    remastered_pins() = RemasteredPins{
+        .render_profile = requested_render_profile.has_value(),
+        .render_scale = !options_->render_scale.empty(),
+        .antialiasing = !options_->aa.empty(),
+        .studio = !options_->studio.empty(),
+        .explosions = !options_->explosions.empty(),
+        .lasers = !options_->lasers.empty(),
+        .engines = !options_->engines.empty(),
+        .glow = !options_->glow.empty(),
+        .exposure = !options_->exposure.empty(),
+        .reflections = !options_->reflections.empty(),
+        .fps_counter = OS::get_singleton()->get_cmdline_user_args().has(String("--eawr-fps")),
+    };
+    running_render_profile() = render_profile;
+    // An evidence run never reads the file, so its saved values are the defaults here.
+    const float saved_scale = render_profile == RenderProfile::retail
+        ? 1.0F : from_percent(saved_remastered.render_scale_percent);
     const std::optional<float> render_scale = options_->render_scale.empty()
-        ? std::optional<float>{1.0F} : parse_render_scale(options_->render_scale);
+        ? std::optional<float>{saved_scale} : parse_render_scale(options_->render_scale);
     if (options_->render_scale_missing || !render_scale
         || (*render_scale != 1.0F && render_profile == RenderProfile::retail)) {
         status_message_ = "--eawr-render-scale expects a number from 0.5 to 2 and the enhanced or remastered "
@@ -129,7 +151,7 @@ void ViewerHost::_ready() try {
         return;
     }
     const std::optional<float> exposure = options_->exposure.empty()
-        ? std::optional<float>{default_linear_exposure} : parse_exposure(options_->exposure);
+        ? std::optional<float>{from_percent(saved_remastered.exposure_percent)} : parse_exposure(options_->exposure);
     if (options_->exposure_missing || !exposure
         || (!options_->exposure.empty() && render_profile != RenderProfile::remastered)) {
         status_message_ = "--eawr-exposure expects a number from 0.25 to 4 and the remastered render profile";
@@ -140,7 +162,7 @@ void ViewerHost::_ready() try {
     }
     linear_exposure() = *exposure;
     const std::optional<float> reflections = options_->reflections.empty()
-        ? std::optional<float>{default_backdrop_reflections} : parse_reflections(options_->reflections);
+        ? std::optional<float>{from_percent(saved_remastered.reflections_percent)} : parse_reflections(options_->reflections);
     if (options_->reflections_missing || !reflections
         || (!options_->reflections.empty() && render_profile != RenderProfile::remastered)) {
         status_message_ = "--eawr-reflections expects a number from 0 to 4 and the remastered render profile";
@@ -150,8 +172,8 @@ void ViewerHost::_ready() try {
         return;
     }
     backdrop_reflections() = *reflections;
-    const std::optional<float> glow = options_->glow.empty() ? std::optional<float>{default_glow}
-                                                             : parse_glow(options_->glow);
+    const std::optional<float> glow = options_->glow.empty()
+        ? std::optional<float>{from_percent(saved_remastered.glow_percent)} : parse_glow(options_->glow);
     if (options_->glow_missing || !glow || (!options_->glow.empty() && render_profile != RenderProfile::remastered)) {
         status_message_ = "--eawr-glow expects a number from 0.5 to 8 and the remastered render profile";
         UtilityFunctions::printerr(String(status_message_.c_str()));
@@ -160,8 +182,8 @@ void ViewerHost::_ready() try {
         return;
     }
     glow_strength() = *glow;
-    const std::optional<float> studio = options_->studio.empty() ? std::optional<float>{default_studio}
-                                                                 : parse_studio(options_->studio);
+    const std::optional<float> studio = options_->studio.empty()
+        ? std::optional<float>{from_percent(saved_remastered.studio_percent)} : parse_studio(options_->studio);
     if (options_->studio_missing || !studio
         || (!options_->studio.empty() && render_profile != RenderProfile::remastered)) {
         status_message_ = "--eawr-studio expects a number from 0 to 1 and the remastered render profile";
@@ -172,7 +194,7 @@ void ViewerHost::_ready() try {
     }
     studio_strength() = *studio;
     const std::optional<float> explosions = options_->explosions.empty()
-        ? std::optional<float>{default_explosions} : parse_explosions(options_->explosions);
+        ? std::optional<float>{from_percent(saved_remastered.explosions_percent)} : parse_explosions(options_->explosions);
     if (options_->explosions_missing || !explosions
         || (!options_->explosions.empty() && render_profile != RenderProfile::remastered)) {
         status_message_ = "--eawr-explosions expects a number from 0 to 4 and the remastered render profile";
@@ -187,7 +209,8 @@ void ViewerHost::_ready() try {
         const bool missing = lasers ? options_->lasers_missing : options_->engines_missing;
         // Same 0..4 range as --eawr-explosions.
         const std::optional<float> value = text.empty()
-            ? std::optional<float>{lasers ? default_lasers : default_engines} : parse_explosions(text);
+            ? std::optional<float>{from_percent(lasers ? saved_remastered.lasers_percent : saved_remastered.engines_percent)}
+            : parse_explosions(text);
         if (missing || !value || (!text.empty() && render_profile != RenderProfile::remastered)) {
             status_message_ = std::string(lasers ? "--eawr-lasers" : "--eawr-engines")
                 + " expects a number from 0 to 4 and the remastered render profile";
@@ -198,13 +221,23 @@ void ViewerHost::_ready() try {
         }
         (lasers ? laser_strength() : engine_strength()) = *value;
     }
+    if (!evidence_run) {
+        // The receipt of what the remastered values came to (a saved value, or the option's).
+        UtilityFunctions::print(String::utf8(("EAWR settings applied: remastered profile "
+            + std::string(render_profile_name(render_profile)) + ", scale " + std::to_string(*render_scale)
+            + ", studio " + std::to_string(studio_strength()) + ", explosions " + std::to_string(explosion_strength())
+            + ", lasers " + std::to_string(laser_strength()) + ", engines " + std::to_string(engine_strength())
+            + ", glow " + std::to_string(glow_strength()) + ", exposure " + std::to_string(linear_exposure())
+            + ", reflections " + std::to_string(backdrop_reflections())).c_str()));
+    }
     apply_render_profile(*get_viewport(), render_profile);
     apply_render_scale(*get_viewport(), *render_scale);
     // Remastered defaults to FSR 2 at render scales up to 1 (the owner's pick: native
     // resolution with temporal anti-aliasing, about 2.5x cheaper than 2x supersampling);
     // above 1 the supersampling smooths edges itself. Enhanced keeps its profile AA.
-    const AntiAliasing default_antialiasing = render_profile == RenderProfile::remastered && *render_scale <= 1.0F
-        ? AntiAliasing::fsr2 : AntiAliasing::profile;
+    // A saved choice that cannot apply here falls back the same way (remastered_antialiasing).
+    const AntiAliasing default_antialiasing =
+        remastered_antialiasing(saved_remastered.antialiasing, render_profile, *render_scale);
     const std::optional<AntiAliasing> antialiasing = options_->aa.empty()
         ? std::optional<AntiAliasing>{default_antialiasing} : parse_antialiasing(options_->aa);
     if (options_->aa_missing || !antialiasing

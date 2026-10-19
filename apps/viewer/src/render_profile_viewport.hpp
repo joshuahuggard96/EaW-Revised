@@ -103,11 +103,11 @@ inline void apply_render_scale(godot::Viewport& viewport, const float scale) {
 // replaces the bilinear scaler; Godot runs it at render scales up to 1.
 inline void apply_antialiasing(godot::Viewport& viewport, const AntiAliasing mode) {
     active_antialiasing() = mode;
+    viewport.set_use_taa(mode == AntiAliasing::taa); // an earlier mode's TAA, when the options screen changes it
     if (mode == AntiAliasing::profile) return;
     viewport.set_msaa_3d(godot::Viewport::MSAA_DISABLED);
     viewport.set_screen_space_aa(
         mode == AntiAliasing::smaa ? godot::Viewport::SCREEN_SPACE_AA_SMAA : godot::Viewport::SCREEN_SPACE_AA_DISABLED);
-    viewport.set_use_taa(mode == AntiAliasing::taa);
     if (mode == AntiAliasing::fsr2) viewport.set_scaling_3d_mode(godot::Viewport::SCALING_3D_MODE_FSR2);
 }
 

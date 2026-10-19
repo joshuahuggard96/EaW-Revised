@@ -5,6 +5,7 @@
 #include "map_mode_internal.hpp"
 #include "eawr/presentation/camera/overview.hpp"
 #include "render_profile_viewport.hpp"
+#include "remastered_settings.hpp"
 #include "settings_store.hpp"
 #include "viewer_path.hpp"
 
@@ -423,6 +424,9 @@ bool MapMode::ready(Node3D& host) {
             parse_fps_argument(OS::get_singleton()->get_cmdline_user_args(), state.fps_requested);
         !fps_error.empty()) {
         return state.fail_ready(fps_error);
+    }
+    if (const auto* active = ActiveSettings::get(); active != nullptr && !state.fps_requested) {
+        state.fps_requested = saved_fps_counter(active->remastered);
     }
     if (const std::string perf_error =
             parse_perf_overlay_argument(OS::get_singleton()->get_cmdline_user_args(), state.perf_requested);
