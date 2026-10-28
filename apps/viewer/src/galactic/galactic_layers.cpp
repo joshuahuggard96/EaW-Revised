@@ -1,5 +1,6 @@
 #include "gpu_debug_labels.hpp"
 #include "galactic_mode_internal.hpp"
+#include "stored_output.hpp"
 
 #include "eawr/core/diagnostic.hpp"
 #include "eawr/presentation/lighting/lighting.hpp"
@@ -72,7 +73,8 @@ bool GalacticMode::State::build_scenes() {
             // Forward+ linearizes the canvas background before copying it
             // into the 3D buffer. That buffer's renderer compositor expects
             // stored RGB, so encode once to cancel the canvas conversion.
-            if (RenderingServer::get_singleton()->get_rendering_device()) {
+            // A linear frame (remastered) wants that linear value as is.
+            if (stored_output::active() && !stored_output::linear()) {
                 Ref<Shader> shader(memnew(Shader));
                 name_canvas_shader(*shader.ptr(), "EAWR/UI/GalacticLayerCanvasEncode");
                 shader->set_code(R"GODOT(shader_type canvas_item;
