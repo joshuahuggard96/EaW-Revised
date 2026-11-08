@@ -7,7 +7,10 @@
 #include <algorithm>
 #include <iostream>
 #include <stdexcept>
+#include <version>
+#if defined(__cpp_lib_syncbuf)
 #include <syncstream>
+#endif
 
 namespace eawr::campaign {
 namespace {
@@ -160,7 +163,12 @@ core::Result<std::shared_ptr<const script::foc::ai::GalacticPerceptionSetup>> pr
             diagnostic.code = "galactic-ai.markup-content";
             diagnostic.severity = core::Severity::warning;
             diagnostic.message = text;
+#if defined(__cpp_lib_syncbuf)
             std::osyncstream(std::clog) << core::format_diagnostic(diagnostic) << '\n';
+#else
+            // Apple's libc++ has no <syncstream>; one insertion keeps the line whole in practice.
+            std::clog << (core::format_diagnostic(diagnostic) + '\n');
+#endif
             out->markup_diagnostics.push_back(std::move(text));
         };
         const auto number = [&](const data::XmlNode& node) {

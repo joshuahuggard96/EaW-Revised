@@ -68,7 +68,7 @@ TreeFingerprint tree_fingerprint(const fs::path& root, std::uint64_t entry_cap) 
                     result.incomplete = true;
                     continue;
                 }
-                files.emplace_back(relative, "\t" + std::to_string(size) + "\t" + std::to_string(time.time_since_epoch().count()) + "\n");
+                files.emplace_back(relative, "\t" + std::to_string(size) + "\t" + std::to_string(static_cast<long long>(time.time_since_epoch().count())) + "\n");
             }
         }
         if (list_error) result.incomplete = true;

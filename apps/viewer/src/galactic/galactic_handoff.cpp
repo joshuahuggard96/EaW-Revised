@@ -762,7 +762,7 @@ bool GalacticMode::State::process_handoff(double delta) {
                 failure = "handoff lifetime contract failed";
                 return false;
             }
-            UtilityFunctions::print("EAWR handoff phase: settled-galaxy cycle=", cycle + 1);
+            UtilityFunctions::print("EAWR handoff phase: settled-galaxy cycle=", static_cast<int64_t>(cycle + 1));
         }
         if (cycle + 1 < battles.size()) {
             ++cycle;
@@ -771,7 +771,7 @@ bool GalacticMode::State::process_handoff(double delta) {
             conflict = 0;
             loading_frames = 0;
             combined_memory = combined_video_memory = 0;
-            UtilityFunctions::print("EAWR handoff phase: galaxy-resident cycle=", cycle + 1);
+            UtilityFunctions::print("EAWR handoff phase: galaxy-resident cycle=", static_cast<int64_t>(cycle + 1));
         } else {
             if (!interactive) {
                 if (!refresh_game()) return false;
@@ -798,7 +798,7 @@ bool GalacticMode::State::process_handoff(double delta) {
         if (audio) audio->battle_load(); // WGP-26: session conflict enters its loading screen.
         galaxy_memory = OS::get_singleton()->get_static_memory_usage();
         galaxy_video_memory = video_memory();
-        UtilityFunctions::print("EAWR handoff phase: loading cycle=", cycle + 1);
+        UtilityFunctions::print("EAWR handoff phase: loading cycle=", static_cast<int64_t>(cycle + 1));
         if (!refresh_game()) return false;
         galaxy_container->hide();
         galaxy_viewport->set_update_mode(SubViewport::UPDATE_DISABLED);
@@ -876,7 +876,7 @@ bool GalacticMode::State::process_handoff(double delta) {
             feed->submit({unit.owner, {unit.entity_id}, sim::tactical::DamagePayload{
                 sim::math::Fixed::from_integer(1'000'000).value(), 0xffffffffU}, options.battle_frames});
         game->battle_ready(conflict);
-        UtilityFunctions::print("EAWR handoff phase: tactical-ready cycle=", cycle + 1);
+        UtilityFunctions::print("EAWR handoff phase: tactical-ready cycle=", static_cast<int64_t>(cycle + 1));
         return true;
     }
     const auto frame = game->frame(sim::SeatId{galaxy->local.seat});
@@ -898,7 +898,7 @@ bool GalacticMode::State::process_handoff(double delta) {
         if (audio) audio->ambient(); // WGP-24: return from the child, no forced restart.
         returned_frame = frames;
         returned_at = std::chrono::steady_clock::now();
-        UtilityFunctions::print("EAWR handoff phase: returned-galaxy cycle=", cycle + 1);
+        UtilityFunctions::print("EAWR handoff phase: returned-galaxy cycle=", static_cast<int64_t>(cycle + 1));
         return_memory = OS::get_singleton()->get_static_memory_usage();
         return_video_memory = video_memory();
         warmup = 20;

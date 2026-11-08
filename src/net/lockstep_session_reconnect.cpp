@@ -8,7 +8,9 @@
 #include <algorithm>
 #include <limits>
 #include <cstdlib>
-#ifndef _WIN32
+#if defined(__APPLE__)
+#include <stdlib.h>
+#elif !defined(_WIN32)
 #include <cerrno>
 #include <sys/random.h>
 #endif
@@ -27,6 +29,9 @@ core::Result<RejoinNonce> fresh_nonce() {
         for (unsigned byte = 0; byte < 4; ++byte)
             nonce[offset + byte] = static_cast<std::uint8_t>(word >> (byte * 8U));
     }
+#elif defined(__APPLE__)
+    // macOS has no getrandom(); arc4random_buf draws from the kernel CSPRNG and cannot fail.
+    arc4random_buf(nonce.data(), nonce.size());
 #else
     std::size_t offset{};
     while (offset < nonce.size()) {

@@ -13,7 +13,12 @@ namespace eawr::presentation::godot_backend::particle_culling {
 
 // PS-39: the scene's camera snapshot is independent of backend linkage, so
 // standalone renderer probes can use the same renderer without a particle sink.
-inline thread_local std::map<std::uint64_t, particles::CullingFrame> cameras;
+// A function-local thread_local: Apple's linker rejects the duplicate TLS
+// initialisation routines an inline thread_local map emits per object file.
+[[nodiscard]] inline std::map<std::uint64_t, particles::CullingFrame>& cameras() {
+    thread_local std::map<std::uint64_t, particles::CullingFrame> by_scenario;
+    return by_scenario;
+}
 
 [[nodiscard]] inline particles::CullingFrame snapshot(const FixedCamera& camera) {
     particles::CullingFrame result;
@@ -37,13 +42,13 @@ inline thread_local std::map<std::uint64_t, particles::CullingFrame> cameras;
 }
 
 inline void set_camera(const godot::RID& scenario, const FixedCamera& camera) {
-    cameras[scenario.get_id()] = snapshot(camera);
+    cameras()[scenario.get_id()] = snapshot(camera);
 }
 
 [[nodiscard]] inline particles::CullingFrame frame(const godot::RID& scenario) {
-    const auto found = cameras.find(scenario.get_id());
-    return found == cameras.end() ? particles::CullingFrame{} : found->second;
+    const auto found = cameras().find(scenario.get_id());
+    return found == cameras().end() ? particles::CullingFrame{} : found->second;
 }
-inline void clear_camera(const godot::RID& scenario) { cameras.erase(scenario.get_id()); }
+inline void clear_camera(const godot::RID& scenario) { cameras().erase(scenario.get_id()); }
 
 } // namespace eawr::presentation::godot_backend::particle_culling
