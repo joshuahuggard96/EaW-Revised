@@ -211,7 +211,7 @@ void light() {
         || material.pass != RenderPass::opaque) {
         return {};
     }
-    if (studio_strength() <= 0.0F || !imperial(material)) return shader_head;
+    if (studio_active() <= 0.0F || !imperial(material)) return shader_head;
     // The studio variant reads its strength from a uniform, where every other
     // hull has the constant 0. Godot applies ambient occlusion only to
     // materials that take ambient light, so the variant also drops

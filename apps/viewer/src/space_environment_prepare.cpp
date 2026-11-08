@@ -1,5 +1,6 @@
 #include "eawr/scene/scene.hpp"
 #include "space_environment.hpp"
+#include "output_mode.hpp"
 #include "space_environment_internal.hpp"
 #include "startup_trace.hpp"
 
@@ -623,6 +624,7 @@ bool SpaceEnvironment::ready(Node3D& host, const assets::Map& map, const vfs::Vf
 
     // One renderer on the host's own scenario; no second device and no
     // per-object scene nodes. The camera is live before any upload or frame.
+    land_scene() = false;
     state.renderer = std::make_unique<GodotRenderer>(host, state.options.shaders);
     state.renderer->set_texture_loader([&filesystem](const assets::Source& source) -> std::optional<assets::Texture> {
         auto loaded = assets::load_texture(filesystem, source.logical_path);

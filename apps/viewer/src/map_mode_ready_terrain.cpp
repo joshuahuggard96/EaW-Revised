@@ -5,6 +5,7 @@
 #include "map_mode_internal.hpp"
 #include "eawr/presentation/camera/overview.hpp"
 #include "render_profile_viewport.hpp"
+#include "stored_output.hpp"
 #include "viewer_path.hpp"
 
 #include <godot_cpp/classes/project_settings.hpp>
@@ -68,8 +69,17 @@ void fragment() {
 } // namespace
 
 std::string MapMode::State::terrain_material_program() const {
-    return fog ? fog_terrain_shader(policy != lighting::Policy::off)
+    std::string program = fog ? fog_terrain_shader(policy != lighting::Policy::off)
         : std::string(policy == lighting::Policy::off ? terrain_surface_shader : terrain_lit_shader);
+    // The floor scales stored values. A linear frame (output_mode.hpp) lights
+    // the decoded ALBEDO, where the same darkening is the factor's power 2.2,
+    // as in the legacy adapters' shadow-receiving variant.
+    constexpr std::string_view stored = "DIFFUSE_LIGHT += mix(eawr_shadow_floor, vec3(1.0), ATTENUATION);";
+    if (const std::size_t at = program.find(stored); stored_output::linear() && at != std::string::npos) {
+        program.replace(at, stored.size(),
+            "DIFFUSE_LIGHT += pow(mix(eawr_shadow_floor, vec3(1.0), ATTENUATION), vec3(2.2));");
+    }
+    return program;
 }
 
 void MapMode::State::record_terrain_slots(const terrain::Mesh& mesh) {

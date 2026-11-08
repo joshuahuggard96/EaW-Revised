@@ -186,6 +186,7 @@ bool EnvironmentView::ready(Node3D& host, const assets::Map& map, const vfs::Vfs
     target_source_ = space::source_from_render(camera_.target);
     up_source_ = space::source_from_render(camera_.up);
 
+    land_scene() = false;
     renderer_ = std::make_unique<GodotRenderer>(host, options_.shaders);
     renderer_->set_texture_loader([&filesystem](const assets::Source& source) -> std::optional<assets::Texture> {
         auto loaded = assets::load_texture(filesystem, source.logical_path);

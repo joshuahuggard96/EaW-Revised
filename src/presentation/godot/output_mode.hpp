@@ -63,6 +63,18 @@ inline constexpr float default_studio = 0.0F;
     return strength;
 }
 
+// Whether the battle being built is on a land map. The studio look is for
+// Imperial space hulls; Imperial ground buildings share their texture
+// prefixes and keep their retail paint. Each map mode sets it before it
+// creates its renderer.
+[[nodiscard]] inline bool& land_scene() noexcept {
+    static bool land = false;
+    return land;
+}
+
+// The studio strength the current scene uses: none on a land map.
+[[nodiscard]] inline float studio_active() noexcept { return land_scene() ? 0.0F : studio_strength(); }
+
 // The remastered explosions (--eawr-explosions): each explosion briefly lights
 // the hulls around it, and battle particles (explosions, impacts) glow
 // brighter so their cores bloom. 1 is the default strength, 0 turns both off.

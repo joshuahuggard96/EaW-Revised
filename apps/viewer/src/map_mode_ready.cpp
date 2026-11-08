@@ -924,6 +924,7 @@ bool MapMode::ready(Node3D& host) {
     state.vertex_count = mesh.vertex_count;
     state.triangle_count = mesh.triangle_count;
 
+    land_scene() = true;
     state.renderer = std::make_unique<GodotRenderer>(host, state.options.shaders);
     state.renderer->set_texture_loader([filesystem = state.filesystem](const assets::Source& source) -> std::optional<assets::Texture> {
         auto loaded = assets::load_texture(*filesystem, source.logical_path);
