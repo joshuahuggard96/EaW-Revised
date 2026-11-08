@@ -699,6 +699,16 @@ std::optional<int> MapMode::process(const double delta) {
     State& state = *state_;
     state.service_game_menu();
     if (state.pointer_host && state.options.interactive) {
+        // The polled pointer is in visible-rect pixels; the edge-scroll camera
+        // must measure the same rect. Godot's size_changed can fire while the
+        // battle still loads (a fullscreen switch at startup), before the
+        // camera exists, so resync whenever the rect differs.
+        const Vector2 visible = state.pointer_host->get_viewport()->get_visible_rect().size;
+        if (visible.x != state.synced_viewport_width || visible.y != state.synced_viewport_height) {
+            state.synced_viewport_width = visible.x;
+            state.synced_viewport_height = visible.y;
+            viewport_changed(visible.x, visible.y);
+        }
         const auto focus = input_focus(*state.pointer_host->get_viewport());
         const bool ready = state.live_session && state.live_session->phase() == LiveSessionView::Phase::ready;
         const bool movie = state.space && state.space->live_camera_movie();

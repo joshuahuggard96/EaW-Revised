@@ -37,6 +37,10 @@ struct MapMode::State final {
     Options options;
     godot::Node3D* pointer_host{};
     bool pointer_blocked{};
+    // The visible-rect size the camera last heard about (eawr fork): a resize
+    // that lands before the battle's camera exists never reaches it otherwise.
+    float synced_viewport_width{};
+    float synced_viewport_height{};
     struct ReadyLoad;
     std::shared_ptr<ReadyLoad> ready_load;
     ReadyStatus ready_status{ReadyStatus::pending};
