@@ -417,6 +417,7 @@ void GodotRenderer::Impl::set_casts_shadows(const sim::AssetId asset_id, const b
 
 void GodotRenderer::Impl::set_backdrop(const sim::AssetId asset_id) {
     backdrop_assets_.insert(asset_id);
+    batch_mark_asset(asset_id);
     RenderingServer* rendering = RenderingServer::get_singleton();
     if (!rendering) return;
     for (const auto& [entity, instance] : instances_) {

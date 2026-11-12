@@ -80,6 +80,8 @@ std::optional<Key> GodotRenderer::Impl::batch_key(const sim::EntityId entity, co
     if (found == resources_.end()) return std::nullopt;
     const Resource& resource = found->second;
     if (instance.translated_parameters || batch_translated_asset(instance.asset_id)) return std::nullopt;
+    // Fork: a backdrop piece carries the reflection-capture layer on its own instance, so it stays single.
+    if (backdrop_assets_.contains(instance.asset_id)) return std::nullopt;
     if (!resource.mesh.is_valid() || !resource.batch_bounds || resource.pass != RenderPass::opaque
         || !resource.billboard_modes.empty() || opacities_.contains(entity)) return std::nullopt;
     if (!rest_pose(entity, instance, resource)) {
