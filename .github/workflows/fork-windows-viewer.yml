@@ -25,7 +25,7 @@ jobs:
   windows-viewer:
     name: windows-x64 viewer DLL
     runs-on: windows-2022
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -47,13 +47,17 @@ jobs:
           git clone --depth 1 --branch "$GODOT_CPP_TAG" https://github.com/godotengine/godot-cpp.git out/godot/deps/godot-cpp
           test "$(git -C out/godot/deps/godot-cpp rev-parse HEAD)" = "$GODOT_CPP_COMMIT"
 
+      # CL=/MP: cl compiles a project's files in parallel (the Visual Studio generator's default is one at a time,
+      # which does not fit the runner's time limit).
       - name: Build the viewer extension
         shell: bash
+        env:
+          CL: /MP
         run: |
           set -euo pipefail
           cmake -S apps/viewer -B out/build/viewer -G "Visual Studio 17 2022" -A x64 \
             -DEAWR_BUILD_IDENTITY="$EAWR_FORK_BUILD_IDENTITY" -DEAWR_WARNINGS_AS_ERRORS=OFF
-          cmake --build out/build/viewer --config Release --target eawr_viewer
+          cmake --build out/build/viewer --config Release --target eawr_viewer --parallel 4
           ls -l apps/viewer/project/bin/
 
       - name: Upload the DLL
