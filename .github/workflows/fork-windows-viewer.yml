@@ -47,12 +47,12 @@ jobs:
           git clone --depth 1 --branch "$GODOT_CPP_TAG" https://github.com/godotengine/godot-cpp.git out/godot/deps/godot-cpp
           test "$(git -C out/godot/deps/godot-cpp rev-parse HEAD)" = "$GODOT_CPP_COMMIT"
 
-      # CL=/MP: cl compiles a project's files in parallel (the Visual Studio generator's default is one at a time,
+      # CL=-MP (the dash form: Git Bash would rewrite "/MP" as a path): cl compiles a project's files in parallel (the Visual Studio generator's default is one at a time,
       # which does not fit the runner's time limit).
       - name: Build the viewer extension
         shell: bash
         env:
-          CL: /MP
+          CL: -MP
         run: |
           set -euo pipefail
           cmake -S apps/viewer -B out/build/viewer -G "Visual Studio 17 2022" -A x64 \
