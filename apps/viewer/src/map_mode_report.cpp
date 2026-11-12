@@ -5,6 +5,7 @@
 #include "startup_trace.hpp"
 #include "gpu_memory_trace.hpp"
 #include "render_profile_viewport.hpp"
+#include "shader_activation_owner.hpp"
 
 #include <godot_cpp/classes/rendering_server.hpp>
 
@@ -149,6 +150,8 @@ bool MapMode::State::write_report() const {
                << ", \"total\": " << mib(RenderingServer::RENDERING_INFO_VIDEO_MEM_USED) << "},\n";
     }
     write_report_scene(output);
+    write_shader_activation_report(output, shader_receipt.get());
+    write_shader_route_report(output, renderer.get());
     write_report_lighting(output);
     write_report_fog(output);
     write_report_population(output);
