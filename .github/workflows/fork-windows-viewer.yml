@@ -53,6 +53,9 @@ jobs:
         shell: bash
         env:
           CL: -MP
+          # Appended after the project's own flags: the viewer target sets /WX unconditionally, and MSVC's
+          # shadowing warnings (C4456, C4458) would stop the build.
+          _CL_: -WX-
         run: |
           set -euo pipefail
           cmake -S apps/viewer -B out/build/viewer -G "Visual Studio 17 2022" -A x64 \
